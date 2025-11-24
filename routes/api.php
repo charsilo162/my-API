@@ -1,0 +1,83 @@
+<?php
+
+use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\CourseController;
+use App\Http\Controllers\Api\VideoController;
+use App\Http\Controllers\Api\CategoryController;
+use App\Http\Controllers\Api\CenterController;
+use App\Http\Controllers\Api\CommentController;
+use App\Http\Controllers\Api\LikeController;
+use App\Http\Controllers\Api\PaymentApiController;
+use App\Http\Controllers\Api\ShareController;
+
+// ====================================
+// PUBLIC ROUTES (NO LOGIN REQUIRED)
+// ====================================
+
+Route::get('/test', fn() => response()->json(['message' => 'API IS WORKING!']));
+
+// Categories & Centers (public)
+Route::get('/categories', [CategoryController::class, 'index']);
+Route::get('/categories/count', [CategoryController::class, 'count']);
+Route::get('centers/count', [CenterController::class, 'count']);
+Route::apiResource('centers', CenterController::class)->only(['index', 'show']);
+
+// Courses (public index + show)
+ Route::get('courses/without-videos', [CourseController::class, 'noVideos']);
+Route::get('courses/count', [CategoryController::class, 'count']);
+Route::apiResource('courses', CourseController::class)->only(['index', 'show']);
+
+// COMMENTS: READ = PUBLIC, WRITE = PROTECTED
+Route::get('comments', [CommentController::class, 'index']);        // ← Public: everyone sees
+Route::get('likes', [LikeController::class, 'show']);               // ← Public
+Route::get('shares/count', [ShareController::class, 'count']);      // ← Public
+
+// Auth (public)
+Route::post('/login', [AuthController::class, 'login']);
+Route::post('/register', [AuthController::class, 'register']);
+
+// ====================================
+// PROTECTED ROUTES (REQUIRES LOGIN)
+// ====================================
+Route::get('/payment/callback', [PaymentApiController::class, 'callback']);
+Route::middleware('auth:sanctum')->group(function () {
+
+    Route::post('/logout', [AuthController::class, 'logout']);
+    Route::get('/me/enrolled-courses', [AuthController::class, 'enrolledCourses']);
+
+
+
+    Route::middleware('auth:sanctum')->post('/payment/initialize', [PaymentApiController::class, 'initialize']);
+
+Route::post('categories', [CategoryController::class, 'store']);
+
+    // ONLY LOGGED-IN USERS CAN POST COMMENTS
+    Route::post('comments', [CommentController::class, 'store']);     // ← PROTECTED
+
+    // Likes & Shares (require login)
+    Route::post('likes/toggle', [LikeController::class, 'toggle']);
+    Route::post('shares', [ShareController::class, 'store']);
+
+    // Admin routes...
+    // Route::get('/courses/{course}/edit', [CourseController::class, 'edit'])
+    //  ->name('api.courses.edit');
+    Route::put('/courses/{id}/update', [CourseController::class, 'update'])
+     ->name('api.courses.update');
+     
+
+     Route::get('/courses/{id}/edit', [CourseController::class, 'edit'])
+     ->name('api.courses.edit');
+    Route::apiResource('courses', CourseController::class)->except(['index', 'show']);
+    Route::apiResource('centers', CenterController::class)->except(['index', 'show', 'count']);
+
+    Route::put('courses/{course}/toggle-publish', [CourseController::class, 'togglePublish']);
+    Route::put('courses/{course}/publish', [CourseController::class, 'publish']);
+    Route::get('courses/{course}/watch', [CourseController::class, 'watch']);
+   Route::apiResource('videos', VideoController::class)->only(['index', 'show', 'update', 'destroy']);
+    Route::post('videos', [VideoController::class, 'store']);
+    Route::put('videos/{video}/toggle-publish', [VideoController::class, 'togglePublish']);
+
+
+});
+
