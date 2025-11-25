@@ -30,9 +30,23 @@ public function index(Request $request)
     return VideoResource::collection($videos);
 }
 
-public function show(Video $video)
+// public function show(Video $video)
+// {
+//     $this->authorizeVideo($video);
+//     return new VideoResource($video);
+// }
+
+
+public function show($id)
 {
-    $this->authorizeVideo($video);
+    // Load video or fail
+    $video = Video::findOrFail($id);
+
+    // Authorization check
+    // if ($video->uploader_user_id !== auth()->id()) {
+    //     return response()->json(['error' => 'Unauthorized'], 403);
+    // }
+
     return new VideoResource($video);
 }
     public function store(Request $request)
@@ -70,43 +84,107 @@ public function show(Video $video)
         return new VideoResource($video);
     }
 
+// public function update(Request $request, $id)
+// {
+//     // Load video or fail
+//     $video = Video::findOrFail($id);
+
+//     // Authorization check
+//     // if ($video->uploader_user_id !== auth()->id()) {
+//     //     return response()->json(['error' => 'Unauthorized'], 403);
+//     // }
+
+//     // Validate fields
+//     $validated = $request->validate([
+//         'title' => 'required|string|max:255',
+//         'duration' => 'nullable|integer|min:1',
+//         'publish' => 'sometimes|boolean',
+//     ]);
+
+//     // Update video
+//     $video->update($validated);
+
+//     return new VideoResource($video);
+// }
+
 public function update(Request $request, Video $video)
 {
-    $this->authorizeVideo($video);
+    // if ($video->uploader_user_id !== auth()->id()) {
+    //     return response()->json(['error' => 'Unauthorized'], 403);
+    // }
 
-    $request->validate([
+    $validated = $request->validate([
         'title' => 'required|string|max:255',
         'duration' => 'nullable|integer|min:1',
         'publish' => 'sometimes|boolean',
     ]);
 
-    $video->update($request->only(['title', 'duration', 'publish']));
+    $video->update($validated);
 
     return new VideoResource($video);
 }
 
+// public function destroy(Video $video)
+// {
+//     $this->authorizeVideo($video);
+
+//     if ($video->video_url) {
+//         $path = str_replace('/storage/', '', parse_url($video->video_url, PHP_URL_PATH));
+//         Storage::disk('public')->delete($path);
+//     }
+//     if ($video->thumbnail_url) {
+//         $path = str_replace('/storage/', '', parse_url($video->thumbnail_url, PHP_URL_PATH));
+//         Storage::disk('public')->delete($path);
+//     }
+
+//     $video->delete();
+
+//     return response()->json(['message' => 'Video deleted']);
+// }
+
 public function destroy(Video $video)
 {
-    $this->authorizeVideo($video);
+    // Ensure the logged-in user is the owner/uploader
+    // if ($video->uploader_user_id !== auth()->id()) {
+    //     return response()->json(['error' => 'Unauthorized'], 403);
+    // }
 
+    // Delete video file if exists
     if ($video->video_url) {
         $path = str_replace('/storage/', '', parse_url($video->video_url, PHP_URL_PATH));
         Storage::disk('public')->delete($path);
     }
+
+    // Delete thumbnail file if exists
     if ($video->thumbnail_url) {
         $path = str_replace('/storage/', '', parse_url($video->thumbnail_url, PHP_URL_PATH));
         Storage::disk('public')->delete($path);
     }
 
+    // Delete the database record
     $video->delete();
 
-    return response()->json(['message' => 'Video deleted']);
+    return response()->json(['message' => 'Video deleted successfully']);
 }
 
+
+// public function togglePublish(Video $video)
+// {
+//     $this->authorizeVideo($video);
+//     $video->update(['publish' => !$video->publish]);
+//     return new VideoResource($video);
+// }
 public function togglePublish(Video $video)
 {
-    $this->authorizeVideo($video);
-    $video->update(['publish' => !$video->publish]);
+    // Ensure the logged-in user is the owner/uploader
+    // if ($video->uploader_user_id !== auth()->id()) {
+    //     return response()->json(['error' => 'Unauthorized'], 403);
+    // }
+
+    // Toggle the publish status
+    $video->publish = !$video->publish;
+    $video->save();
+
     return new VideoResource($video);
 }
 

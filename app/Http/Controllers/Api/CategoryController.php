@@ -9,46 +9,65 @@ use Illuminate\Support\Facades\Storage;
 
 class CategoryController extends Controller
 {
-   public function index(Request $request)
-    {
-        $query = Category::query();
+//    public function index(Request $request)
+//     {
+//         $query = Category::query();
 
-        // Search (for all components)
-        if ($search = $request->query('search')) {
-            $query->where('name', 'like', "%$search%")
-                  ->orWhere('slug', 'like', "%$search%");
-        }
+//         // Search (for all components)
+//         if ($search = $request->query('search')) {
+//             $query->where('name', 'like', "%$search%")
+//                   ->orWhere('slug', 'like', "%$search%");
+//         }
 
-        // With counts (e.g., for popular: courses_count)
-        if ($withCount = $request->query('with_count')) {
-            $query->withCount($withCount);
-        }
+//         // With counts (e.g., for popular: courses_count)
+//         if ($withCount = $request->query('with_count')) {
+//             $query->withCount($withCount);
+//         }
 
-        // Order by (e.g., courses_count desc for popular)
-       if ($orderBy = $request->query('order_by')) {
-            if (str_contains($orderBy, ',')) {
-            [$field, $dir] = explode(',', $orderBy);
-            } else {
-            [$field, $dir] = explode(' ', $orderBy);
-            }
-            $dir = strtolower($dir) === 'asc' ? 'asc' : 'desc';
-            $query->orderBy($field, $dir);
-     }
+//         // Order by (e.g., courses_count desc for popular)
+//        if ($orderBy = $request->query('order_by')) {
+//             if (str_contains($orderBy, ',')) {
+//             [$field, $dir] = explode(',', $orderBy);
+//             } else {
+//             [$field, $dir] = explode(' ', $orderBy);
+//             }
+//             $dir = strtolower($dir) === 'asc' ? 'asc' : 'desc';
+//             $query->orderBy($field, $dir);
+//      }
 
-        // Limit (for initial loads)
-        if ($limit = $request->query('limit')) {
-            $query->limit($limit);
-        }
+//         // Limit (for initial loads)
+//         if ($limit = $request->query('limit')) {
+//             $query->limit($limit);
+//         }
 
-        // Pagination if needed (though your components use limit, not paginate)
-        $categories = $query->get(); // Use get() for simple lists
+//         // Pagination if needed (though your components use limit, not paginate)
+//         $categories = $query->get(); // Use get() for simple lists
 
-        return CategoryResource::collection($categories);
+//         return CategoryResource::collection($categories);
+//     }
+
+public function index(Request $request)
+{
+    $query = Category::query();
+
+    // Search
+    if ($search = $request->query('search')) {
+        $query->where('name', 'like', "%{$search}%")
+              ->orWhere('slug', 'like', "%{$search}%");
     }
 
+    // Pagination
+    $perPage = $request->query('per_page', 10);
+    $page = $request->query('page', 1);
 
+    $categories = $query->paginate($perPage);
+
+    return CategoryResource::collection($categories);
+}
     public function store(Request $request)
     {
+        \Log::info('FILES:', $request->allFiles());
+    \Log::info('INPUT:', $request->all());
         $data = $request->validate([
             'name' => 'required|string|max:100',
             'thumbnail' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
@@ -75,6 +94,8 @@ class CategoryController extends Controller
 
     public function update(Request $request, Category $category)
     {
+        \Log::info('FILES:', $request->allFiles());
+    \Log::info('INPUT:', $request->all());
         $data = $request->validate([
             'name' => 'sometimes|required|string|max:100',
             'thumbnail' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
@@ -99,15 +120,32 @@ class CategoryController extends Controller
         return new CategoryResource($category);
     }
 
-    public function destroy(Category $category)
-    {
-        if ($category->thumbnail_url) {
-            Storage::disk('public')->delete($category->thumbnail_url);
-        }
-        $category->delete();
+public function destroy(Category $category)
+{
+    // 1. Check for associated courses
+    if ($category->courses()->exists()) {
+        // Option A: Reassign or Error (Safest)
+        return response()->json([
+            'message' => 'Cannot delete category. It has ' . $category->courses()->count() . ' courses still linked.',
+            'action_required' => 'Reassign or delete the courses first.',
+        ], 409); // Use 409 Conflict
 
-        return response()->json(['message' => 'Deleted']);
+        /*
+        // OPTION B: Mass Delete Related Courses (Use with caution!)
+        // $category->courses()->delete(); 
+        */
     }
+    
+    // 2. Delete the thumbnail (as you already do)
+    if ($category->thumbnail_url) {
+        Storage::disk('public')->delete($category->thumbnail_url);
+    }
+    
+    // 3. Delete the category itself
+    $category->delete();
+
+    return response()->json(['message' => 'Category and its files successfully deleted.'], 200);
+}
 
 
     public function count(Request $request)

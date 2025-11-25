@@ -20,6 +20,10 @@ Route::get('/test', fn() => response()->json(['message' => 'API IS WORKING!']));
 // Categories & Centers (public)
 Route::get('/categories', [CategoryController::class, 'index']);
 Route::get('/categories/count', [CategoryController::class, 'count']);
+Route::get('/categories/{category}', [CategoryController::class, 'show']); // GET /api/categories/{id} (single)
+
+
+
 Route::get('centers/count', [CenterController::class, 'count']);
 Route::apiResource('centers', CenterController::class)->only(['index', 'show']);
 
@@ -37,11 +41,15 @@ Route::get('shares/count', [ShareController::class, 'count']);      // ← Publi
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/register', [AuthController::class, 'register']);
 
+
+Route::get('/payment/callback', [PaymentApiController::class, 'callback']);
+
 // ====================================
 // PROTECTED ROUTES (REQUIRES LOGIN)
 // ====================================
-Route::get('/payment/callback', [PaymentApiController::class, 'callback']);
 Route::middleware('auth:sanctum')->group(function () {
+Route::post('categories', [CategoryController::class, 'store']);
+Route::apiResource('categories', CategoryController::class)->except(['index', 'show']);
 
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me/enrolled-courses', [AuthController::class, 'enrolledCourses']);
@@ -50,7 +58,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::middleware('auth:sanctum')->post('/payment/initialize', [PaymentApiController::class, 'initialize']);
 
-Route::post('categories', [CategoryController::class, 'store']);
+
 
     // ONLY LOGGED-IN USERS CAN POST COMMENTS
     Route::post('comments', [CommentController::class, 'store']);     // ← PROTECTED

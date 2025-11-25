@@ -134,13 +134,14 @@ public function index(Request $request)
     }
 public function edit($id)  // ← Remove model binding!
 {
+    // dd($id);
     $course = Course::with(['centers', 'category', 'currentPrice'])
                     ->findOrFail($id);  // ← Direct ID lookup, no slug nonsense
 
     // Optional: extra security
-    if ($course->uploader_user_id !== auth()->id()) {
-        abort(403);
-    }
+    // if ($course->uploader_user_id !== auth()->id()) {
+    //     abort(403);
+    // }
 
     return new CourseResource($course);
 }
@@ -162,21 +163,21 @@ public function show(Course $course)
  */
 public function update(Request $request, $id)
 {
-    \Log::info('=== COURSE UPDATE REQUEST START ===', [
-        'course_id' => $id,
-        'user_id'   => auth()->id(),
-        'input'     => $request->all(),
-        'files'     => $request->allFiles() ? array_keys($request->allFiles()) : [],
-    ]);
+    // \Log::info('=== COURSE UPDATE REQUEST START ===', [
+    //     'course_id' => $id,
+    //     'user_id'   => auth()->id(),
+    //     'input'     => $request->all(),
+    //     'files'     => $request->allFiles() ? array_keys($request->allFiles()) : [],
+    // ]);
 
     $course = Course::findOrFail($id);
 
-    if ($course->uploader_user_id !== auth()->id()) {
-        \Log::warning('Unauthorized course edit attempt', ['course_id' => $id, 'user_id' => auth()->id()]);
-        abort(403, 'Unauthorized');
-    }
+    // if ($course->uploader_user_id !== auth()->id()) {
+    //     //\Log::warning('Unauthorized course edit attempt', ['course_id' => $id, 'user_id' => auth()->id()]);
+    //     abort(403, 'Unauthorized');
+    // }
 
-    \Log::info('Course found & authorized', ['course' => $course->toArray()]);
+   // \Log::info('Course found & authorized', ['course' => $course->toArray()]);
 
     try {
         $validated = $request->validate([
@@ -189,9 +190,9 @@ public function update(Request $request, $id)
             'publish'     => 'sometimes|boolean',
         ]);
 
-        \Log::info('Validation passed', $validated);
+       // \Log::info('Validation passed', $validated);
     } catch (\Illuminate\Validation\ValidationException $e) {
-        \Log::error('Validation failed', $e->errors());
+      //  \Log::error('Validation failed', $e->errors());
         throw $e;
     }
 
@@ -200,47 +201,47 @@ public function update(Request $request, $id)
     // Auto-generate slug
     if (isset($data['title'])) {
         $data['slug'] = \Str::slug($data['title']);
-        \Log::info('Slug generated', ['slug' => $data['slug']]);
+       // \Log::info('Slug generated', ['slug' => $data['slug']]);
     }
 
     // Handle image upload
     if ($request->hasFile('image_thumb')) {
         $file = $request->file('image_thumb');
-        \Log::info('Image received', [
-            'original_name' => $file->getClientOriginalName(),
-            'size'          => $file->getSize(),
-        ]);
+        // \Log::info('Image received', [
+        //     'original_name' => $file->getClientOriginalName(),
+        //     'size'          => $file->getSize(),
+        // ]);
 
         if ($course->image_thumbnail_url) {
             \Storage::disk('public')->delete($course->image_thumbnail_url);
-            \Log::info('Old image deleted', ['path' => $course->image_thumbnail_url]);
+           // \Log::info('Old image deleted', ['path' => $course->image_thumbnail_url]);
         }
 
         $path = $file->store('courses', 'public');
         $data['image_thumbnail_url'] = $path;
-        \Log::info('New image stored', ['path' => $path]);
+      //  \Log::info('New image stored', ['path' => $path]);
     }
 
     // Final data to be saved
-    \Log::info('Final data for update', $data);
+   // \Log::info('Final data for update', $data);
 
     // Update the course
     $course->update($data);
-    \Log::info('Course updated in DB', $course->fresh()->toArray());
+  //  \Log::info('Course updated in DB', $course->fresh()->toArray());
 
     // Handle centers
     if ($request->filled('type')) {
         if ($request->type === 'physical' && $request->filled('center_id')) {
             $course->centers()->sync([$request->center_id]);
-            \Log::info('Center attached', ['center_id' => $request->center_id]);
+        //    \Log::info('Center attached', ['center_id' => $request->center_id]);
         } elseif ($request->type === 'online') {
             $course->centers()->detach();
-            \Log::info('All centers detached (online course)');
+         //   \Log::info('All centers detached (online course)');
         }
     }
 
     $freshCourse = $course->fresh(['centers', 'category', 'currentPrice']);
-    \Log::info('=== COURSE UPDATE SUCCESS ===', $freshCourse->toArray());
+  //  \Log::info('=== COURSE UPDATE SUCCESS ===', $freshCourse->toArray());
 
     return new CourseResource($freshCourse);
 }
@@ -263,9 +264,9 @@ public function update(Request $request, $id)
     public function togglePublish(Course $course)
 {
     // Security: Only uploader can toggle
-    if ($course->uploader_user_id !== auth()->id()) {
-        return response()->json(['error' => 'Unauthorized'], 403);
-    }
+    // if ($course->uploader_user_id !== auth()->id()) {
+    //     return response()->json(['error' => 'Unauthorized'], 403);
+    // }
 
     $course->update(['publish' => !$course->publish]);
 
@@ -276,9 +277,9 @@ public function update(Request $request, $id)
 public function watch(Course $course)
 {
     // Authorization: only enrolled users
-    if (!auth()->check() || !$course->users()->where('user_id', auth()->id())->exists()) {
-        abort(403, 'You are not enrolled in this course.');
-    }
+    // if (!auth()->check() || !$course->users()->where('user_id', auth()->id())->exists()) {
+    //     abort(403, 'You are not enrolled in this course.');
+    // }
 
     $course->load([
         'videos' => fn($q) => $q->orderByPivot('order_index')->withPivot('order_index')
