@@ -94,8 +94,8 @@ public function index(Request $request)
 
     public function update(Request $request, Category $category)
     {
-        \Log::info('FILES:', $request->allFiles());
-    \Log::info('INPUT:', $request->all());
+    //     \Log::info('FILES:', $request->allFiles());
+    // \Log::info('INPUT:', $request->all());
         $data = $request->validate([
             'name' => 'sometimes|required|string|max:100',
             'thumbnail' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',

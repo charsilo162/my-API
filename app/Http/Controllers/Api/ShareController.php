@@ -38,16 +38,16 @@ class ShareController extends Controller
 public function store(Request $request)
 {
     // NUCLEAR DEBUG — THIS WILL TELL YOU EVERYTHING
-    \Log::info('SHARE ENDPOINT HIT', [
-        'ip'            => $request->ip(),
-        'user_agent'    => $request->userAgent(),
-        'headers'       => $request->headers->all(),
-        'bearer_token'  => $request->bearerToken(),
-        'input'         => $request->all(),
-        'auth_check'    => auth('sanctum')->check(),
-        'auth_user'     => auth('sanctum')->user()?->only(['id', 'name', 'email']),
-        'auth_id'       => auth('sanctum')->id(),
-    ]);
+    // \Log::info('SHARE ENDPOINT HIT', [
+    //     'ip'            => $request->ip(),
+    //     'user_agent'    => $request->userAgent(),
+    //     'headers'       => $request->headers->all(),
+    //     'bearer_token'  => $request->bearerToken(),
+    //     'input'         => $request->all(),
+    //     'auth_check'    => auth('sanctum')->check(),
+    //     'auth_user'     => auth('sanctum')->user()?->only(['id', 'name', 'email']),
+    //     'auth_id'       => auth('sanctum')->id(),
+    // ]);
 
     $request->validate([
         'resource_type' => 'required|string',
