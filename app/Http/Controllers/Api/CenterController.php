@@ -47,27 +47,42 @@ public function index(Request $request)
         'featured' => $request->boolean('featured'),
     ]);
 }
-    public function store(Request $request)
-    {
-        $validated = $request->validate([
-            'name' => 'required|string|max:255',
-            'description' => 'nullable|string',
-            'address' => 'required|string|max:255',
-            'city' => 'required|string|max:255',
-            'years_of_experience' => 'required|integer|min:0',
-            'center_thumbnail_url' => 'nullable|image|max:1024',
-        ]);
+   public function store(Request $request)
+{
+    \Log::info('Request received', [
+        'data' => $request->all()
+    ]);
 
-        $data = $validated;
+    $validated = $request->validate([
+        'name' => 'required|string|max:255',
+        'description' => 'nullable|string',
+        'address' => 'required|string|max:255',
+        'city' => 'required|string|max:255',
+        'years_of_experience' => 'required|integer|min:0',
+        'center_thumbnail_url' => 'nullable|image|max:1024',
+    ]);
 
-        if ($request->hasFile('center_thumbnail_url')) {
-            $data['center_thumbnail_url'] = $request->file('center_thumbnail_url')->store('centers', 'public');
-        }
+    \Log::info('Validation passed', [
+        'validated' => $validated
+    ]);
 
-        $center = Center::create($data);
+    $data = $validated;
 
-        return new CenterResource($center);
+    if ($request->hasFile('center_thumbnail_url')) {
+        \Log::info('File detected');
+        $data['center_thumbnail_url'] = $request
+            ->file('center_thumbnail_url')
+            ->store('centers', 'public');
     }
+
+    $center = Center::create($data);
+
+    \Log::info('Center created', [
+        'id' => $center->id
+    ]);
+
+    return new CenterResource($center);
+}
 
     public function show(Center $center)
     {

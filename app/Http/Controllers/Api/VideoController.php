@@ -30,27 +30,22 @@ public function index(Request $request)
     return VideoResource::collection($videos);
 }
 
-// public function show(Video $video)
-// {
-//     $this->authorizeVideo($video);
-//     return new VideoResource($video);
-// }
-
-
 public function show($id)
 {
     // Load video or fail
     $video = Video::findOrFail($id);
 
     // Authorization check
-    // if ($video->uploader_user_id !== auth()->id()) {
-    //     return response()->json(['error' => 'Unauthorized'], 403);
-    // }
+    if ($video->uploader_user_id !== auth()->id()) {
+        return response()->json(['error' => 'Unauthorized'], 403);
+    }
 
     return new VideoResource($video);
 }
     public function store(Request $request)
     {
+          \Log::info('FILES:', $request->allFiles());
+    \Log::info('INPUT:', $request->all());
         $request->validate([
             'course_id'      => 'required|exists:courses,id',
             'title'          => 'required|string|max:255',
@@ -84,34 +79,11 @@ public function show($id)
         return new VideoResource($video);
     }
 
-// public function update(Request $request, $id)
-// {
-//     // Load video or fail
-//     $video = Video::findOrFail($id);
-
-//     // Authorization check
-//     // if ($video->uploader_user_id !== auth()->id()) {
-//     //     return response()->json(['error' => 'Unauthorized'], 403);
-//     // }
-
-//     // Validate fields
-//     $validated = $request->validate([
-//         'title' => 'required|string|max:255',
-//         'duration' => 'nullable|integer|min:1',
-//         'publish' => 'sometimes|boolean',
-//     ]);
-
-//     // Update video
-//     $video->update($validated);
-
-//     return new VideoResource($video);
-// }
-
 public function update(Request $request, Video $video)
 {
-    // if ($video->uploader_user_id !== auth()->id()) {
-    //     return response()->json(['error' => 'Unauthorized'], 403);
-    // }
+    if ($video->uploader_user_id !== auth()->id()) {
+        return response()->json(['error' => 'Unauthorized'], 403);
+    }
 
     $validated = $request->validate([
         'title' => 'required|string|max:255',

@@ -139,4 +139,6 @@ public function uploader(): BelongsTo
     {
         return $this->likes()->where('type', 'down')->count();
     }
+
+    
 }

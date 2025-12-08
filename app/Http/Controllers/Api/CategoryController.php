@@ -9,42 +9,7 @@ use Illuminate\Support\Facades\Storage;
 
 class CategoryController extends Controller
 {
-//    public function index(Request $request)
-//     {
-//         $query = Category::query();
 
-//         // Search (for all components)
-//         if ($search = $request->query('search')) {
-//             $query->where('name', 'like', "%$search%")
-//                   ->orWhere('slug', 'like', "%$search%");
-//         }
-
-//         // With counts (e.g., for popular: courses_count)
-//         if ($withCount = $request->query('with_count')) {
-//             $query->withCount($withCount);
-//         }
-
-//         // Order by (e.g., courses_count desc for popular)
-//        if ($orderBy = $request->query('order_by')) {
-//             if (str_contains($orderBy, ',')) {
-//             [$field, $dir] = explode(',', $orderBy);
-//             } else {
-//             [$field, $dir] = explode(' ', $orderBy);
-//             }
-//             $dir = strtolower($dir) === 'asc' ? 'asc' : 'desc';
-//             $query->orderBy($field, $dir);
-//      }
-
-//         // Limit (for initial loads)
-//         if ($limit = $request->query('limit')) {
-//             $query->limit($limit);
-//         }
-
-//         // Pagination if needed (though your components use limit, not paginate)
-//         $categories = $query->get(); // Use get() for simple lists
-
-//         return CategoryResource::collection($categories);
-//     }
 
 public function index(Request $request)
 {
@@ -66,8 +31,8 @@ public function index(Request $request)
 }
     public function store(Request $request)
     {
-        \Log::info('FILES:', $request->allFiles());
-    \Log::info('INPUT:', $request->all());
+    //     \Log::info('FILES:', $request->allFiles());
+    // \Log::info('INPUT:', $request->all());
         $data = $request->validate([
             'name' => 'required|string|max:100',
             'thumbnail' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
@@ -94,8 +59,8 @@ public function index(Request $request)
 
     public function update(Request $request, Category $category)
     {
-    //     \Log::info('FILES:', $request->allFiles());
-    // \Log::info('INPUT:', $request->all());
+        \Log::info('FILES:', $request->allFiles());
+    \Log::info('INPUT:', $request->all());
         $data = $request->validate([
             'name' => 'sometimes|required|string|max:100',
             'thumbnail' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
