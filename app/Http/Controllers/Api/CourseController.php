@@ -157,8 +157,11 @@ public function edit($id)  // ← Remove model binding!
     //     return new CourseResource($course);
     // }
 
-public function show(Course $course)
+public function show( Course $course)
 {
+    // Log the incoming request data
+    
+
     if (! $course->publish && (! auth()->check() || auth()->id() !== $course->uploader_user_id)) {
         abort(404);
     }
@@ -184,7 +187,7 @@ public function show(Course $course)
             ->whereColumn('course_id', 'courses.id')
             ->limit(1)
     ]);
-
+    Log::info('Course full object:', $course->toArray());
     return new CourseResource($course);
 } /**
  * Update course using raw ID — completely bypasses slug binding
@@ -217,6 +220,7 @@ public function update(Request $request, $id)
             // 'image_thumb' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
             'image_thumb' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:5120',
             'publish'     => 'sometimes|boolean',
+            'price_amount' => 'sometimes|numeric|min:0', // New: Validate price amount
         ]);
 
        Log::info('Validation passed', $validated);
@@ -251,12 +255,22 @@ public function update(Request $request, $id)
       //  \Log::info('New image stored', ['path' => $path]);
     }
 
-    // Final data to be saved
+    // Final data for update (exclude price_amount from course update)
+    unset($data['price_amount']);
    // \Log::info('Final data for update', $data);
 
     // Update the course
     $course->update($data);
   //  \Log::info('Course updated in DB', $course->fresh()->toArray());
+
+    // Handle price update (New)
+    if ($request->filled('price_amount')) {
+        $course->price()->updateOrCreate(
+            ['course_id' => $course->id], // Assuming standard hasOne setup
+            ['amount' => $request->price_amount]
+        );
+        \Log::info('Price updated/created', ['amount' => $request->price_amount]);
+    }
 
     // Handle centers
     if ($request->filled('type')) {
@@ -274,7 +288,6 @@ public function update(Request $request, $id)
 
     return new CourseResource($freshCourse);
 }
-
 
     public function destroy(Course $course)
     {
@@ -305,11 +318,12 @@ public function update(Request $request, $id)
 // app/Http/Controllers/Api/CourseController.php
 public function watch(Course $course)
 {
+  
     // Authorization: only enrolled users
     // if (!auth()->check() || !$course->users()->where('user_id', auth()->id())->exists()) {
     //     abort(403, 'You are not enrolled in this course.');
     // }
-
+ 
     $course->load([
         'videos' => fn($q) => $q->orderByPivot('order_index')->withPivot('order_index')
     ]);

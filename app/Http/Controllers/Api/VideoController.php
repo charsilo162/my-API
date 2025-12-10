@@ -7,6 +7,7 @@ use App\Http\Resources\VideoResource;
 use App\Models\Course;
 use App\Models\Video;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
 class VideoController extends Controller
@@ -18,7 +19,8 @@ public function index(Request $request)
     $userId = $user->id;
     $tutorId = $user->tutor?->id ?? $user->tutor_id ?? $userId;
 
-    $query = Video::where('uploader_user_id', $userId)
+    $query = Video::with('courses') // Eager load the courses relationship
+                  ->where('uploader_user_id', $userId)
                   ->orWhere('uploader_user_id', $tutorId);
 
     if ($search = $request->query('search')) {
@@ -44,8 +46,8 @@ public function show($id)
 }
     public function store(Request $request)
     {
-          \Log::info('FILES:', $request->allFiles());
-    \Log::info('INPUT:', $request->all());
+         Log::info('FILES:', $request->allFiles());
+   Log::info('INPUT:', $request->all());
         $request->validate([
             'course_id'      => 'required|exists:courses,id',
             'title'          => 'required|string|max:255',
@@ -96,23 +98,7 @@ public function update(Request $request, Video $video)
     return new VideoResource($video);
 }
 
-// public function destroy(Video $video)
-// {
-//     $this->authorizeVideo($video);
 
-//     if ($video->video_url) {
-//         $path = str_replace('/storage/', '', parse_url($video->video_url, PHP_URL_PATH));
-//         Storage::disk('public')->delete($path);
-//     }
-//     if ($video->thumbnail_url) {
-//         $path = str_replace('/storage/', '', parse_url($video->thumbnail_url, PHP_URL_PATH));
-//         Storage::disk('public')->delete($path);
-//     }
-
-//     $video->delete();
-
-//     return response()->json(['message' => 'Video deleted']);
-// }
 
 public function destroy(Video $video)
 {

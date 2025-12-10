@@ -17,7 +17,7 @@ class VideoResource extends JsonResource
             'publish'       => (bool) $this->publish,
             'created_at'    => $this->created_at->format('M d, Y'),
             'created_at_iso'=> $this->created_at->toDateTimeString(),
-
+            'slug' => $this->courses->pluck('slug'),
             // Only include pivot if attached to a course (e.g., in CourseWatch)
             'pivot' => $this->whenPivotLoaded('course_video', fn() => [
                 'order_index' => $this->pivot->order_index ?? 1,

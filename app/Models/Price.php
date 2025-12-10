@@ -13,6 +13,13 @@ class Price extends Model
     /**
      * Get the Course this price belongs to.
      */
+
+        protected $fillable = [
+            'course_id',
+            'amount',
+            'currency',
+            'is_current',
+            ];
     public function course(): BelongsTo
     {
         return $this->belongsTo(Course::class);

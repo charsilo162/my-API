@@ -12,23 +12,40 @@ class CategoryController extends Controller
 
 
 public function index(Request $request)
-{
-    $query = Category::query();
+    {
+        $query = Category::query();
 
-    // Search
-    if ($search = $request->query('search')) {
-        $query->where('name', 'like', "%{$search}%")
-              ->orWhere('slug', 'like', "%{$search}%");
+        // Handle with_count (e.g., 'courses')
+        if ($withCount = $request->query('with_count')) {
+            $relations = explode(',', $withCount);
+            $query->withCount($relations);
+        }
+
+        // Search
+        if ($search = $request->query('search')) {
+            $query->where('name', 'like', "%{$search}%")
+                  ->orWhere('slug', 'like', "%{$search}%");
+        }
+
+        // Order by (e.g., 'courses_count,desc')
+        if ($orderBy = $request->query('order_by')) {
+            [$field, $direction] = explode(',', $orderBy);
+            $query->orderBy($field, $direction ?? 'asc');
+        }
+
+        // Limit (for non-paginated, limited fetches like top 6)
+        if ($limit = $request->query('limit')) {
+            $categories = $query->limit($limit)->get();
+            return CategoryResource::collection($categories);
+        }
+
+        // Fallback to pagination if no limit
+        $perPage = $request->query('per_page', 10);
+        $page = $request->query('page', 1);
+        $categories = $query->paginate($perPage, ['*'], 'page', $page);
+
+        return CategoryResource::collection($categories);
     }
-
-    // Pagination
-    $perPage = $request->query('per_page', 10);
-    $page = $request->query('page', 1);
-
-    $categories = $query->paginate($perPage);
-
-    return CategoryResource::collection($categories);
-}
     public function store(Request $request)
     {
     //     \Log::info('FILES:', $request->allFiles());
