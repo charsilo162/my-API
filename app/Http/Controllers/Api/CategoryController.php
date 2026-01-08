@@ -5,7 +5,11 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\CategoryResource;
 use App\Models\Category;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
+
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class CategoryController extends Controller
 {
@@ -47,27 +51,34 @@ class CategoryController extends Controller
 //     }
 
 public function index(Request $request)
-{
-    $query = Category::query();
+    {
+        $query = Category::query();
+        // Log::info('AUTH DEBUG', [
+        //     'authenticated' => Auth::check(),
+        //     'user_id'       => Auth::id(),
+        //     'guard'         => config('auth.defaults.guard'),
+        // ]);
+       // Search
+        if ($search = $request->query('search')) {
+            $query->where('name', 'like', "%{$search}%")
+                ->orWhere('slug', 'like', "%{$search}%");
+        }
 
-    // Search
-    if ($search = $request->query('search')) {
-        $query->where('name', 'like', "%{$search}%")
-              ->orWhere('slug', 'like', "%{$search}%");
+        // Add course count
+        $query->withCount('courses');
+
+        // Pagination
+        $perPage = $request->query('per_page', 10);
+        $page = $request->query('page', 1);
+
+        $categories = $query->paginate($perPage);
+
+        return CategoryResource::collection($categories);
     }
-
-    // Pagination
-    $perPage = $request->query('per_page', 10);
-    $page = $request->query('page', 1);
-
-    $categories = $query->paginate($perPage);
-
-    return CategoryResource::collection($categories);
-}
     public function store(Request $request)
     {
-        \Log::info('FILES:', $request->allFiles());
-    \Log::info('INPUT:', $request->all());
+    //     \Log::info('FILES:', $request->allFiles());
+    // \Log::info('INPUT:', $request->all());
         $data = $request->validate([
             'name' => 'required|string|max:100',
             'thumbnail' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
@@ -75,7 +86,7 @@ public function index(Request $request)
 
         $payload = [
             'name' => $data['name'],
-            'slug' => \Str::slug($data['name']),
+            'slug' => Str::slug($data['name']),
         ];
 
         if ($request->hasFile('thumbnail')) {

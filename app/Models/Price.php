@@ -9,7 +9,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class Price extends Model
 {
     use HasFactory;
-
+      protected $fillable = [
+            'course_id',
+            'amount',
+            'currency',
+            'is_current',
+            ];
     /**
      * Get the Course this price belongs to.
      */

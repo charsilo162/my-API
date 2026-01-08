@@ -47,27 +47,71 @@ public function index(Request $request)
         'featured' => $request->boolean('featured'),
     ]);
 }
+    // public function store(Request $request)
+    // {
+    //     $validated = $request->validate([
+    //         'name' => 'required|string|max:255',
+    //         'description' => 'nullable|string',
+    //         'address' => 'required|string|max:255',
+    //         'city' => 'required|string|max:255',
+    //         'years_of_experience' => 'required|integer|min:0',
+    //         'center_thumbnail_url' => 'nullable|image|max:1024',
+    //     ]);
+
+    //     $data = $validated;
+
+    //     if ($request->hasFile('center_thumbnail_url')) {
+    //         $data['center_thumbnail_url'] = $request->file('center_thumbnail_url')->store('centers', 'public');
+    //     }
+
+    //     $center = Center::create($data);
+
+    //     return new CenterResource($center);
+    // }
+
     public function store(Request $request)
-    {
-        $validated = $request->validate([
-            'name' => 'required|string|max:255',
-            'description' => 'nullable|string',
-            'address' => 'required|string|max:255',
-            'city' => 'required|string|max:255',
-            'years_of_experience' => 'required|integer|min:0',
-            'center_thumbnail_url' => 'nullable|image|max:1024',
-        ]);
+{
+    // \Log::info('Request received', [
+    //     'data' => $request->all()
+    // ]);
 
-        $data = $validated;
+    $validated = $request->validate([
+        'name' => 'required|string|max:255',
+        'description' => 'nullable|string',
+        'address' => 'required|string|max:255',
+        'city' => 'required|string|max:255',
+        'years_of_experience' => 'required|integer|min:0',
+        'center_thumbnail_url' => 'nullable|image|max:1024',
+    ]);
 
-        if ($request->hasFile('center_thumbnail_url')) {
-            $data['center_thumbnail_url'] = $request->file('center_thumbnail_url')->store('centers', 'public');
-        }
+    // \Log::info('Validation passed', [
+    //     'validated' => $validated
+    // ]);
 
-        $center = Center::create($data);
+    $data = $validated;
 
-        return new CenterResource($center);
+    if ($request->hasFile('center_thumbnail_url')) {
+        // \Log::info('File detected');
+        $data['center_thumbnail_url'] = $request
+            ->file('center_thumbnail_url')
+            ->store('centers', 'public');
     }
+
+    $center = Center::create($data);
+
+    // Attach the logged-in user's ID as the tutor_id to the center
+    $tutorId = auth()->id(); // Assumes the authenticated user is a tutor
+    if ($tutorId) {
+        $center->tutors()->attach($tutorId);
+    }
+
+    // \Log::info('Center created', [
+    //     'id' => $center->id
+    // ]);
+
+    return new CenterResource($center);
+}
+
 
     public function show(Center $center)
     {
@@ -124,4 +168,42 @@ public function index(Request $request)
 
     return response()->json(['total' => $query->count()]);
 }
+
+public function myCenters(Request $request)
+    {
+        $user = $request->user();
+        // dd($user);
+        if (!$user) {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
+        $query = $user->centers();
+
+        // 1. Search
+        if ($search = $request->query('search')) {
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%$search%")
+                  ->orWhere('address', 'like', "%$search%")
+                  ->orWhere('city', 'like', "%$search%")
+                  ->orWhereHas('courses', fn($cq) => $cq->where('title', 'like', "%$search%"));
+            });
+        }
+
+        // 2. Eager load courses + category (for resource)
+        $query->with(['courses' => fn($q) => $q->latest()->with('category')->limit(3)]);
+
+        // 3. Order
+        $query->orderByDesc('years_of_experience');
+
+        // 4. Paginate (always paginated for owned centers)
+        $centers = $query->paginate($request->query('per_page', 10));
+
+        return response()->json([
+            'data' => CenterResource::collection($centers),
+            'total' => $centers->total(),
+            'featured' => false,
+        ]);
+    }
+
+
 }

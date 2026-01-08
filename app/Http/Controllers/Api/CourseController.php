@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\CourseResource;
 use App\Models\Course;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
@@ -15,23 +16,23 @@ public function index(Request $request)
 {
     $query = Course::query();
 
-    // 1. Publish filter — only published by default
+    // 1. Only published courses
     if (! $request->boolean('include_unpublished')) {
         $query->where('publish', true);
     }
 
-    // 2. Category slug
+    // 2. Category
     if ($categorySlug = $request->query('category')) {
         $query->whereHas('category', fn($q) => $q->where('slug', $categorySlug));
     }
 
-    // 3. Tutor ID
+    // 3. Tutor
     if ($tutorId = $request->query('tutor')) {
         $query->where('assigned_tutor_id', $tutorId);
     }
 
-    // 4. Course type
-    if ($type = $request->query('type', $request->query('filterType'))) {
+    // 4. Type
+    if ($type = $request->query('type') ?? $request->query('filterType')) {
         $query->where('type', $type);
     }
 
@@ -40,60 +41,64 @@ public function index(Request $request)
         [$min, $max] = explode('-', $priceRange);
         $min = (int) $min;
         $max = (int) $max;
-
         $query->whereHas('currentPrice', function ($q) use ($min, $max) {
             $q->where('amount', '>=', $min);
-            if ($max > 0) {
-                $q->where('amount', '<=', $max);
-            }
+            if ($max > 0) $q->where('amount', '<=', $max);
         });
     }
 
-    // 6. Location search
-    if ($location = $request->query('location')) {
-        $query->whereHas('centers', fn($q) => $q->where('address', 'like', "%$location%"));
+    // 6. Unified Search: Title + Location (from ?q= or ?search= or ?location=)
+    $searchTerm = $request->query('q') 
+        ?? $request->query('search') 
+        ?? $request->query('location');
+
+    if ($searchTerm && trim($searchTerm) !== '') {
+        $searchTerm = trim($searchTerm);
+
+        // Search in course title
+        $query->where(function ($q) use ($searchTerm) {
+            $q->where('title', 'like', "%{$searchTerm}%")
+              ->orWhere('description', 'like', "%{$searchTerm}%"); // optional bonus
+        });
+
+        // Also search in center address
+        $query->orWhereHas('centers', function ($q) use ($searchTerm) {
+            $q->where('address', 'like', "%{$searchTerm}%")
+              ->orWhere('name', 'like', "%{$searchTerm}%");
+        });
     }
 
-    // 7. Center ID (for RelatedCoursesByCenter)
+    // 7. Center ID
     if ($centerId = $request->query('center_id')) {
-        $query->whereHas('centers', fn($q) => $q->where('centers.id', $centerId));
+        $query->whereHas('centers', fn($q) => $q->where('id', $centerId));
     }
 
-    // 8. Uploader ID (My Courses)
+    // 8. Uploader
     if ($uploaderId = $request->query('uploader')) {
         $query->where('uploader_user_id', $uploaderId);
     }
 
-    // 9. Search by title
-    if ($search = $request->query('search')) {
-        $query->where('title', 'like', "%$search%");
-    }
-
-    // 10. Random order
+    // 9. Random
     if ($request->boolean('random')) {
         $query->inRandomOrder();
     }
 
-    // Eager load relations & counts
+    // Eager loads
     $query->with([
-        'currentPrice',
-        'centers',
-        'category',
+        'currentPrice', 'centers', 'category',
         'videos' => fn($q) => $q->orderByPivot('order_index')->withPivot('order_index')->limit(1)
-    ])
-    ->withCount([
+    ])->withCount([
         'users as registered_count',
         'comments as comments_count',
         'likes as likes_count' => fn($q) => $q->where('type', 'up'),
         'likes as dislikes_count' => fn($q) => $q->where('type', 'down'),
     ]);
 
-    // Pagination or limit
+    // Pagination
     if ($request->boolean('paginate')) {
-        $courses = $query->paginate($request->query('per_page', 6));
+        $courses = $query->paginate($request->query('per_page', 12));
     } else {
-        $limit = $request->query('limit', 6);
-        $courses = $query->limit($limit)->get();
+        $courses = $query->limit($request->query('limit', 6))->get();
     }
 
     return CourseResource::collection($courses);
@@ -154,31 +159,46 @@ public function edit($id)  // ← Remove model binding!
 
 public function show(Course $course)
 {
-    // \Log::info('=== HIT show METHOD FOR COURSE: ' . $course->id . ' ===');
-    $course->load(['centers', 'videos', 'category', 'currentPrice']);
+    if (! $course->publish && (! auth()->check() || auth()->id() !== $course->uploader_user_id)) {
+        abort(404);
+    }
+
+    $course->load([
+        'centers',
+        'category',
+        'currentPrice',
+        'videos' => fn($q) => $q->orderByPivot('order_index')
+                          ->withPivot('order_index'),
+    ])
+
+    ->loadCount([
+        'users as registered_count',
+        'comments as comments_count',
+        'likes as likes_count' => fn($q) => $q->where('type', 'up'),
+        'likes as dislikes_count' => fn($q) => $q->where('type', 'down'),
+        // 'views as views_count',
+    ])
+
+    ->addSelect([
+        'average_rating' => \App\Models\Comment::selectRaw('COALESCE(AVG(rating), 4.34)')
+            ->whereColumn('course_id', 'courses.id')
+            ->limit(1)
+    ]);
+
     return new CourseResource($course);
-}
-    /**
+} /**
  * Update course using raw ID — completely bypasses slug binding
  */
 public function update(Request $request, $id)
 {
-    // \Log::info('=== COURSE UPDATE REQUEST START ===', [
-    //     'course_id' => $id,
-    //     'user_id'   => auth()->id(),
-    //     'input'     => $request->all(),
-    //     'files'     => $request->allFiles() ? array_keys($request->allFiles()) : [],
-    // ]);
+    Log::info('=== COURSE UPDATE REQUEST START ===', [
+        'course_id' => $id,
+        'user_id'   => auth()->id(),
+        'input'     => $request->all(),
+        'files'     => $request->allFiles() ? array_keys($request->allFiles()) : [],
+    ]);
 
     $course = Course::findOrFail($id);
-
-    // if ($course->uploader_user_id !== auth()->id()) {
-    //     //\Log::warning('Unauthorized course edit attempt', ['course_id' => $id, 'user_id' => auth()->id()]);
-    //     abort(403, 'Unauthorized');
-    // }
-
-   // \Log::info('Course found & authorized', ['course' => $course->toArray()]);
-
     try {
         $validated = $request->validate([
             'category_id' => 'sometimes|required|integer|exists:categories,id',
@@ -186,14 +206,16 @@ public function update(Request $request, $id)
             'description' => 'sometimes|required|string',
             'type'        => 'sometimes|required|in:physical,online',
             'center_id'   => 'nullable|integer|exists:centers,id',
-            'image_thumb' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
+            // 'image_thumb' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
+            'image_thumb' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:5120',
             'publish'     => 'sometimes|boolean',
+            'price_amount' => 'sometimes|numeric|min:0', // New: Validate price amount
         ]);
 
-       // \Log::info('Validation passed', $validated);
+       Log::info('Validation passed', $validated);
     } catch (\Illuminate\Validation\ValidationException $e) {
-      //  \Log::error('Validation failed', $e->errors());
-        throw $e;
+    Log::error('Validation failed', $e->errors());
+        // throw $e;
     }
 
     $data = $validated;
@@ -214,7 +236,7 @@ public function update(Request $request, $id)
 
         if ($course->image_thumbnail_url) {
             \Storage::disk('public')->delete($course->image_thumbnail_url);
-           // \Log::info('Old image deleted', ['path' => $course->image_thumbnail_url]);
+        //    \Log::info('Old image deleted', ['path' => $course->image_thumbnail_url]);
         }
 
         $path = $file->store('courses', 'public');
@@ -222,12 +244,22 @@ public function update(Request $request, $id)
       //  \Log::info('New image stored', ['path' => $path]);
     }
 
-    // Final data to be saved
+    // Final data for update (exclude price_amount from course update)
+    unset($data['price_amount']);
    // \Log::info('Final data for update', $data);
 
     // Update the course
     $course->update($data);
   //  \Log::info('Course updated in DB', $course->fresh()->toArray());
+
+    // Handle price update (New)
+    if ($request->filled('price_amount')) {
+        $course->price()->updateOrCreate(
+            ['course_id' => $course->id], // Assuming standard hasOne setup
+            ['amount' => $request->price_amount]
+        );
+        \Log::info('Price updated/created', ['amount' => $request->price_amount]);
+    }
 
     // Handle centers
     if ($request->filled('type')) {

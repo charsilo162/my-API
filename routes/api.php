@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\CommentController;
 use App\Http\Controllers\Api\LikeController;
 use App\Http\Controllers\Api\PaymentApiController;
 use App\Http\Controllers\Api\ShareController;
+use App\Http\Controllers\Api\StatsController;
 
 // ====================================
 // PUBLIC ROUTES (NO LOGIN REQUIRED)
@@ -23,7 +24,7 @@ Route::get('/categories/count', [CategoryController::class, 'count']);
 Route::get('/categories/{category}', [CategoryController::class, 'show']); // GET /api/categories/{id} (single)
 
 
-
+Route::middleware('auth:sanctum')->get('centers/my', [CenterController::class, 'myCenters']);
 Route::get('centers/count', [CenterController::class, 'count']);
 Route::apiResource('centers', CenterController::class)->only(['index', 'show']);
 
@@ -50,7 +51,8 @@ Route::get('/payment/callback', [PaymentApiController::class, 'callback']);
 Route::middleware('auth:sanctum')->group(function () {
 Route::post('categories', [CategoryController::class, 'store']);
 Route::apiResource('categories', CategoryController::class)->except(['index', 'show']);
-
+ Route::put('/me/profile', [AuthController::class, 'updateProfile']);
+ Route::get('stats', [StatsController::class, 'index']);  
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me/enrolled-courses', [AuthController::class, 'enrolledCourses']);
 
@@ -58,6 +60,7 @@ Route::apiResource('categories', CategoryController::class)->except(['index', 's
 
     Route::middleware('auth:sanctum')->post('/payment/initialize', [PaymentApiController::class, 'initialize']);
 
+        // Route::get('centers/my', [CenterController::class, 'myCenters']);
 
 
     // ONLY LOGGED-IN USERS CAN POST COMMENTS
@@ -78,7 +81,6 @@ Route::apiResource('categories', CategoryController::class)->except(['index', 's
      ->name('api.courses.edit');
     Route::apiResource('courses', CourseController::class)->except(['index', 'show']);
     Route::apiResource('centers', CenterController::class)->except(['index', 'show', 'count']);
-
     Route::put('courses/{course}/toggle-publish', [CourseController::class, 'togglePublish']);
     Route::put('courses/{course}/publish', [CourseController::class, 'publish']);
     Route::get('courses/{course}/watch', [CourseController::class, 'watch']);

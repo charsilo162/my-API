@@ -17,6 +17,7 @@ class User extends Authenticatable
         'name',
         'email',
         'type',
+        'photo_path',
         'password',
     ];
 
@@ -77,6 +78,11 @@ public function enrolledCourses()
         return $this->belongsToMany(Course::class, 'course_user', 'user_id', 'course_id')->withTimestamps();
     }
 
+
+        public function centers()
+        {
+            return $this->belongsToMany(Center::class, 'center_tutor', 'tutor_id', 'center_id');
+        }
 
 
 }

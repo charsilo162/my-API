@@ -17,8 +17,12 @@ return new class extends Migration
                   ->onDelete('cascade');
             
             // Foreign key to the Tutor
+            // $table->foreignId('tutor_id')
+            //       ->constrained('tutors')
+            //       ->onDelete('cascade');
+            // Foreign key to the Tutor
             $table->foreignId('tutor_id')
-                  ->constrained('tutors')
+                  ->constrained('users')
                   ->onDelete('cascade');
 
             // Primary composite key to ensure a tutor is linked to a center only once

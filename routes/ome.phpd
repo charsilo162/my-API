@@ -1,0 +1,141 @@
+<?php
+
+use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Api\{
+    AuthController,
+    CategoryController,
+    CenterController,
+    CommentController,
+    CourseController,
+    LikeController,
+    PaymentApiController,
+    ShareController,
+    StatsController,
+    VideoController
+};
+
+/*
+|--------------------------------------------------------------------------
+| TEST ROUTE
+|--------------------------------------------------------------------------
+*/
+Route::get('/test', fn () => response()->json([
+    'message' => 'API IS WORKING!'
+]));
+
+/*
+|--------------------------------------------------------------------------
+| PUBLIC ROUTES (NO AUTH REQUIRED)
+|--------------------------------------------------------------------------
+*/
+
+/* =======================
+| AUTH
+|=======================*/
+Route::post('/login',    [AuthController::class, 'login']);
+Route::post('/register', [AuthController::class, 'register']);
+
+/* =======================
+| CATEGORIES
+|=======================*/
+Route::get('categories',            [CategoryController::class, 'index']);
+Route::get('categories/count',      [CategoryController::class, 'count']);
+Route::get('categories/{category}', [CategoryController::class, 'show']);
+
+/* =======================
+| CENTERS
+|=======================*/
+Route::get('centers/count', [CenterController::class, 'count']);
+Route::apiResource('centers', CenterController::class)
+    ->only(['index', 'show']);
+
+/* =======================
+| COURSES
+|=======================*/
+Route::get('courses/count',           [CategoryController::class, 'count']);
+Route::get('courses/without-videos',  [CourseController::class, 'noVideos']);
+Route::apiResource('courses', CourseController::class)
+    ->only(['index', 'show']);
+
+/* =======================
+| COMMENTS / LIKES / SHARES (READ ONLY)
+|=======================*/
+Route::get('comments',      [CommentController::class, 'index']);
+Route::get('likes',         [LikeController::class, 'show']);
+Route::get('shares/count',  [ShareController::class, 'count']);
+
+/* =======================
+| PAYMENTS
+|=======================*/
+Route::get('payment/callback', [PaymentApiController::class, 'callback']);
+
+/*
+|--------------------------------------------------------------------------
+| PROTECTED ROUTES (AUTH:SANCUTM)
+|--------------------------------------------------------------------------
+*/
+Route::middleware('auth:sanctum')->group(function () {
+
+    /* =======================
+    | AUTH / USER
+    |=======================*/
+    Route::post('/logout',              [AuthController::class, 'logout']);
+    Route::put('/me/profile',           [AuthController::class, 'updateProfile']);
+    Route::get('/me/enrolled-courses',  [AuthController::class, 'enrolledCourses']);
+
+    /* =======================
+    | STATS
+    |=======================*/
+    Route::get('stats', [StatsController::class, 'index']);
+
+    /* =======================
+    | CATEGORIES (WRITE)
+    |=======================*/
+    Route::apiResource('categories', CategoryController::class)
+        ->except(['index', 'show']);
+
+    /* =======================
+    | CENTERS (WRITE)
+    |=======================*/
+    Route::apiResource('centers', CenterController::class)
+        ->except(['index', 'show', 'count']);
+
+    Route::get('centers/my', [CenterController::class, 'myCenters']);
+
+    /* =======================
+    | COURSES (WRITE / ADMIN)
+    |=======================*/
+    Route::apiResource('courses', CourseController::class)
+        ->except(['index', 'show']);
+
+    Route::get('courses/{id}/edit',       [CourseController::class, 'edit'])
+        ->name('api.courses.edit');
+
+    Route::put('courses/{id}/update',     [CourseController::class, 'update'])
+        ->name('api.courses.update');
+
+    Route::put('courses/{course}/publish',         [CourseController::class, 'publish']);
+    Route::put('courses/{course}/toggle-publish',  [CourseController::class, 'togglePublish']);
+    Route::get('courses/{course}/watch',            [CourseController::class, 'watch']);
+
+    /* =======================
+    | VIDEOS
+    |=======================*/
+    Route::apiResource('videos', VideoController::class)
+        ->only(['index', 'show', 'update', 'destroy']);
+
+    Route::post('videos', [VideoController::class, 'store']);
+    Route::put('videos/{video}/toggle-publish', [VideoController::class, 'togglePublish']);
+
+    /* =======================
+    | COMMENTS / LIKES / SHARES (WRITE)
+    |=======================*/
+    Route::post('comments',      [CommentController::class, 'store']);
+    Route::post('likes/toggle',  [LikeController::class, 'toggle']);
+    Route::post('shares',        [ShareController::class, 'store']);
+
+    /* =======================
+    | PAYMENTS
+    |=======================*/
+    Route::post('payment/initialize', [PaymentApiController::class, 'initialize']);
+});

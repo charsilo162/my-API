@@ -52,13 +52,19 @@ class Center extends Model
 
      */
 
-    public function tutors(): BelongsToMany
+        // public function tutors(): BelongsToMany
 
-    {
+        // {
 
-        return $this->belongsToMany(Tutor::class, 'center_tutor');
+        //     return $this->belongsToMany(Tutor::class, 'center_tutor');
 
-    }
+        // }
+    // In app/Models/Center.php
+
+        public function tutors()
+        {
+            return $this->belongsToMany(User::class, 'center_tutor', 'center_id', 'tutor_id');
+        }
 
 
     // --- Polymorphic Relations ---
