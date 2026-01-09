@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\CommentController;
 use App\Http\Controllers\Api\LikeController;
 use App\Http\Controllers\Api\PaymentApiController;
 use App\Http\Controllers\Api\ShareController;
+use App\Http\Controllers\Api\StatsController;
 
 // ====================================
 // PUBLIC ROUTES (NO LOGIN REQUIRED)
@@ -53,6 +54,8 @@ Route::apiResource('categories', CategoryController::class)->except(['index', 's
 
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me/enrolled-courses', [AuthController::class, 'enrolledCourses']);
+    Route::put('/me/profile', [AuthController::class, 'updateProfile']);
+    // Route::post('/me/profile', [AuthController::class, 'updateProfile']);
 
 
 
@@ -61,6 +64,7 @@ Route::apiResource('categories', CategoryController::class)->except(['index', 's
 
 
     // ONLY LOGGED-IN USERS CAN POST COMMENTS
+    Route::get('stats', [StatsController::class, 'index']);     // ← PROTECTED
     Route::post('comments', [CommentController::class, 'store']);     // ← PROTECTED
 
     // Likes & Shares (require login)

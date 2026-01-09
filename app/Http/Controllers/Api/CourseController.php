@@ -202,14 +202,6 @@ public function update(Request $request, $id)
     ]);
 
     $course = Course::findOrFail($id);
-
-    // if ($course->uploader_user_id !== auth()->id()) {
-    //     //\Log::warning('Unauthorized course edit attempt', ['course_id' => $id, 'user_id' => auth()->id()]);
-    //     abort(403, 'Unauthorized');
-    // }
-
-   // \Log::info('Course found & authorized', ['course' => $course->toArray()]);
-
     try {
         $validated = $request->validate([
             'category_id' => 'sometimes|required|integer|exists:categories,id',

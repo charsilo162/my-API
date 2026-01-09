@@ -37,7 +37,7 @@ return [
             if ($userIds->isNotEmpty()) {
                 // Ensure at least 5 users are attached, up to a max of 30
                 $count = min(30, $userIds->count());
-                $registeredUserIds = $userIds->random(rand(5, $count));
+                $registeredUserIds = $userIds->random(rand(4, $count));
                 $course->users()->attach($registeredUserIds);
             }
         });

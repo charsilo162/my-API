@@ -43,6 +43,7 @@ public function courses()
     {
         return $this->morphMany(Like::class, 'likeable');
     }
+    
 
     /**
      * Get all comments for the video.

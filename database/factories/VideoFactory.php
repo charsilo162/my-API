@@ -25,7 +25,7 @@ class VideoFactory extends Factory
 
         return [
             // Ensure a Tutor exists as the owner/uploader (using an existing ID)
-            'tutor_id' => $tutorId, 
+            'uploader_user_id' => $tutorId, 
             
             'title' => $this->faker->sentence(3) . ' | Lesson ' . $this->faker->randomNumber(2),
             

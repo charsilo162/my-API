@@ -47,11 +47,11 @@ public function index(Request $request)
         'featured' => $request->boolean('featured'),
     ]);
 }
-   public function store(Request $request)
+public function store(Request $request)
 {
-    \Log::info('Request received', [
-        'data' => $request->all()
-    ]);
+    // \Log::info('Request received', [
+    //     'data' => $request->all()
+    // ]);
 
     $validated = $request->validate([
         'name' => 'required|string|max:255',
@@ -62,20 +62,26 @@ public function index(Request $request)
         'center_thumbnail_url' => 'nullable|image|max:1024',
     ]);
 
-    \Log::info('Validation passed', [
-        'validated' => $validated
-    ]);
+    // \Log::info('Validation passed', [
+    //     'validated' => $validated
+    // ]);
 
     $data = $validated;
 
     if ($request->hasFile('center_thumbnail_url')) {
-        \Log::info('File detected');
+        // \Log::info('File detected');
         $data['center_thumbnail_url'] = $request
             ->file('center_thumbnail_url')
             ->store('centers', 'public');
     }
 
     $center = Center::create($data);
+
+    // Attach the logged-in user's ID as the tutor_id to the center
+    $tutorId = auth()->id(); // Assumes the authenticated user is a tutor
+    if ($tutorId) {
+        $center->tutors()->attach($tutorId);
+    }
 
     \Log::info('Center created', [
         'id' => $center->id
@@ -99,7 +105,11 @@ public function index(Request $request)
             'years_of_experience' => 'sometimes|required|integer|min:0',
             'center_thumbnail_url' => 'nullable|image|max:1024',
         ]);
-
+ \Log::info('=== Center UPDATE REQUEST START ===', [
+  
+        'input'     => $request->all(),
+        'files'     => $request->allFiles() ? array_keys($request->allFiles()) : [],
+    ]);
         $data = $validated;
 
         if ($request->hasFile('center_thumbnail_url')) {
@@ -108,7 +118,11 @@ public function index(Request $request)
             }
             $data['center_thumbnail_url'] = $request->file('center_thumbnail_url')->store('centers', 'public');
         }
-
+ \Log::info('=== Center UPDATE REQUEST START ===', [
+  
+        'input'     =>$data
+        
+    ]);
         $center->update($data);
 
         return new CenterResource($center);

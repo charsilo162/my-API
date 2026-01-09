@@ -17,6 +17,7 @@ class User extends Authenticatable
         'name',
         'email',
         'type',
+        'photo_path',
         'password',
     ];
 
@@ -48,7 +49,12 @@ class User extends Authenticatable
     {
         return $this->hasOne(Tutor::class);
     }
-
+    public function videos()
+        {
+            // If your foreign key in 'videos' table is 'tutor_id'
+            return $this->hasMany(Video::class, 'uploader_user_id');
+        }
+        
     /**
      * Get all likes made by the User.
      */
