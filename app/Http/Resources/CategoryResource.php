@@ -18,7 +18,8 @@ class CategoryResource extends JsonResource
             'id' => $this->id,
             'name' => $this->name,
             'slug' => $this->slug,
-            'thumbnail_url' => $this->thumbnail_url ? asset('storage/' . $this->thumbnail_url) : asset('storage/img3.png'), // Default image
+            'thumbnail_url' => str_starts_with($this->thumbnail_url, 'http') ? $this->thumbnail_url 
+            : asset('storage/default-avatar.png'),
             'courses_count' => $this->when(isset($this->courses_count), $this->courses_count, 0), // Include if loaded
             'courses_count' => $this->whenCounted('courses', $this->courses_count),
             'created_at' => $this->created_at->toDateTimeString(),

@@ -93,3 +93,33 @@ Route::apiResource('categories', CategoryController::class)->except(['index', 's
 
 });
 
+
+
+
+
+
+
+use App\Services\CloudinaryService;
+
+Route::get('/test-cloudinary', function (CloudinaryService $service) {
+    try {
+        // We attempt to call the Cloudinary API to get account details
+        // This is the fastest way to verify if your keys are working
+        $authCheck = $service->uploadFile(
+            'https://cloudinary-devs.github.io/cld-docs-assets/assets/images/happy_dog.jpg',
+            'testing'
+        );
+
+        return response()->json([
+            'status' => 'Success!',
+            'message' => 'Cloudinary is configured correctly.',
+            'uploaded_url' => $authCheck
+        ]);
+        
+    } catch (\Exception $e) {
+        return response()->json([
+            'status' => 'Error',
+            'message' => $e->getMessage()
+        ], 500);
+    }
+});

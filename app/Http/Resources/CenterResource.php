@@ -18,10 +18,8 @@ public function toArray($request)
         'address' => $this->address,
         'city' => $this->city,
         'years_of_experience' => $this->years_of_experience,
-        'image_url' => $this->center_thumbnail_url 
-            ? asset('storage/' . $this->center_thumbnail_url)
-            : asset('storage/img2.png'),
-
+       'image_url' => str_starts_with($this->center_thumbnail_url, 'http') ? $this->center_thumbnail_url
+                : asset('storage/img2.png'),
         // ADD THIS: Latest 3 courses with category name
         'latest_courses' => $this->whenLoaded('courses', function () {
             return $this->courses

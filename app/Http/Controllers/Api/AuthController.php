@@ -5,6 +5,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\CourseResource;
 use App\Http\Resources\UserResource;
 use App\Models\User;
+use App\Services\CloudinaryService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Auth;
@@ -12,57 +13,51 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 class AuthController extends Controller
 {
-    
+    protected $cloudinaryService;
+    public function __construct(CloudinaryService $cloudinaryService)
+        {
+            $this->cloudinaryService = $cloudinaryService;
+        }
     public function register(Request $request)
-{
-      \Log::info('=== COURSE UPDATE REQUEST START ===', [
-    
-        'user_id'   => auth()->id(),
-        'input'     => $request->all(),
-        'files'     => $request->allFiles() ? array_keys($request->allFiles()) : [],
-    ]);
-    // 1. Add 'photo' validation rule
-    $data = $request->validate([
-        'name' => 'required|string|max:255',
-        'email' => 'required|email|unique:users',
-        'type' => 'required|in:user,center,tutor',
-        'password' => 'required|min:6|confirmed',
-        'photo' => 'nullable|image|max:2048', // Optional image, max 2MB
-    ]);
+    {
+        $data = $request->validate([
+            'name' => 'required|string|max:255',
+            'email' => 'required|email|unique:users',
+            'type' => 'required|in:user,center,tutor',
+            'password' => 'required|min:6|confirmed',
+            'photo' => 'nullable|image|max:2048', 
+        ]);
 
-    // Initialize an array for user creation data
-    $userData = [
-        'name' => $data['name'],
-        'type' => $data['type'],
-        'email' => $data['email'],
-        'password' => Hash::make($data['password']),
-    ];
-    
-    // 2. Check if a file exists in the request
-              if ($request->hasFile('photo')) {
-        $photoPath = $request->file('photo')->store('profile_photos', 'public');
+        $userData = [
+            'name' => $data['name'],
+            'type' => $data['type'],
+            'email' => $data['email'],
+            'password' => Hash::make($data['password']),
+        ];
         
-        // Add the path to the user creation data
-        $userData['photo_path'] = $photoPath; 
-    }
-    $user = User::create($userData);
+        if ($request->hasFile('photo')) {
+            // Upload to Cloudinary using our reusable service
+            $userData['photo_path'] = $this->cloudinaryService->uploadFile(
+                $request->file('photo'), 
+                'profile_photos'
+            ); 
+        }
 
-    $token = $user->createToken('api')->plainTextToken;
+        $user = User::create($userData);
+        $token = $user->createToken('api')->plainTextToken;
 
         return response()->json([
             'user' => new UserResource($user),
-            'token' => $token ?? null,
+            'token' => $token,
         ], 200);
-}
-
-    public function updateProfile(Request $request)
+    }
+   public function updateProfile(Request $request)
         {
             $user = $request->user();
-            // \Log::info('Files in request:', $request->allFiles());
+
             $data = $request->validate([
                 'name'     => 'sometimes|string|max:255',
                 'email'    => 'sometimes|email|unique:users,email,' . $user->id,
-                // 'type'     => 'sometimes|in:user,center,tutor',
                 'password' => 'sometimes|min:6|confirmed',
                 'photo'    => 'sometimes|nullable|image|max:2048',
             ]);
@@ -71,19 +66,25 @@ class AuthController extends Controller
                 $data['password'] = Hash::make($data['password']);
             }
 
-            // This will now work because request is POST
             if ($request->hasFile('photo')) {
-                // Delete old photo if exists
+                // 1. Delete old photo from Cloudinary if it exists
                 if ($user->photo_path) {
-                    Storage::disk('public')->delete($user->photo_path);
+                    $this->cloudinaryService->deleteFile($user->photo_path);
                 }
 
-                $data['photo_path'] = $request->file('photo')->store('profile_photos', 'public');
+                // 2. Upload new photo
+                $data['photo_path'] = $this->cloudinaryService->uploadFile(
+                    $request->file('photo'), 
+                    'profile_photos'
+                );
             }
+
+            // Remove the 'photo' file object from the data array so it doesn't interfere with update
             unset($data['photo']);
+            
             $user->update($data);
 
-          return response()->json([
+            return response()->json([
                 'user' => new UserResource($user->fresh()),
             ], 200);
         }
@@ -113,32 +114,32 @@ class AuthController extends Controller
 
             
         }
- public function logout()
-{
-    \Log::alert('API LOGOUT HIT — USER ID: ' . auth()->id());
-    \Log::info('Tokens before delete:', ['count' => auth()->user()->tokens()->count()]);
+    public function logout()
+    {
+        // \Log::alert('API LOGOUT HIT — USER ID: ' . auth()->id());
+        // \Log::info('Tokens before delete:', ['count' => auth()->user()->tokens()->count()]);
 
-    auth()->user()->tokens()->delete();
+        auth()->user()->tokens()->delete();
 
- 
+    
 
-    return response()->json(['message' => 'Logged out successfully']);
-}
-
-    public function enrolledCourses(Request $request)
-{
-    $user = $request->user();
-    $query = $user->enrolledCourses();
-
-    if ($search = $request->query('search')) {
-        $query->where(function ($q) use ($search) {
-            $q->where('title', 'like', "%$search%")
-              ->orWhere('description', 'like', "%$search%");
-        });
+        return response()->json(['message' => 'Logged out successfully']);
     }
 
-    $courses = $query->with('videos')->paginate(9);
+        public function enrolledCourses(Request $request)
+    {
+        $user = $request->user();
+        $query = $user->enrolledCourses();
 
-    return CourseResource::collection($courses);
-}
+        if ($search = $request->query('search')) {
+            $query->where(function ($q) use ($search) {
+                $q->where('title', 'like', "%$search%")
+                ->orWhere('description', 'like', "%$search%");
+            });
+        }
+
+        $courses = $query->with('videos')->paginate(9);
+
+        return CourseResource::collection($courses);
+    }
 }

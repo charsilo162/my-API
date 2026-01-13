@@ -19,9 +19,9 @@ class CourseResource extends JsonResource
         'type'        => $this->type,
         'publish'     => (bool) $this->publish,
 
-        'image_thumbnail_url' => $this->image_thumbnail_url
-            ? asset('storage/' . $this->image_thumbnail_url)
-            : asset('storage/img3.png'),
+       'image_thumbnail_url' => str_starts_with($this->image_thumbnail_url, 'http')
+        ? $this->image_thumbnail_url
+        : asset('storage/img3.png'),
 
         'category' => $this->whenLoaded('category', fn() => [
             'id'   => $this->category->id,

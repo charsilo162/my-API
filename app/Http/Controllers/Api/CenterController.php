@@ -6,11 +6,16 @@ use App\Http\Resources\CenterResource;
 use App\Models\Center;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use App\Services\CloudinaryService;
 
 class CenterController extends Controller
 {
    // app/Http/Controllers/Api/CenterController.php
-
+protected $cloudinaryService;
+public function __construct(CloudinaryService $cloudinaryService)
+    {
+        $this->cloudinaryService = $cloudinaryService;
+    }
 public function index(Request $request)
 {
     $query = Center::query();
@@ -47,96 +52,87 @@ public function index(Request $request)
         'featured' => $request->boolean('featured'),
     ]);
 }
-public function store(Request $request)
-{
-    // \Log::info('Request received', [
-    //     'data' => $request->all()
-    // ]);
-
-    $validated = $request->validate([
-        'name' => 'required|string|max:255',
-        'description' => 'nullable|string',
-        'address' => 'required|string|max:255',
-        'city' => 'required|string|max:255',
-        'years_of_experience' => 'required|integer|min:0',
-        'center_thumbnail_url' => 'nullable|image|max:1024',
-    ]);
-
-    // \Log::info('Validation passed', [
-    //     'validated' => $validated
-    // ]);
-
-    $data = $validated;
-
-    if ($request->hasFile('center_thumbnail_url')) {
-        // \Log::info('File detected');
-        $data['center_thumbnail_url'] = $request
-            ->file('center_thumbnail_url')
-            ->store('centers', 'public');
-    }
-
-    $center = Center::create($data);
-
-    // Attach the logged-in user's ID as the tutor_id to the center
-    $tutorId = auth()->id(); // Assumes the authenticated user is a tutor
-    if ($tutorId) {
-        $center->tutors()->attach($tutorId);
-    }
-
-    \Log::info('Center created', [
-        'id' => $center->id
-    ]);
-
-    return new CenterResource($center);
-}
 
     public function show(Center $center)
     {
         return new CenterResource($center);
     }
 
-    public function update(Request $request, Center $center)
+  public function store(Request $request)
     {
         $validated = $request->validate([
-            'name' => 'sometimes|required|string|max:255',
+            'name' => 'required|string|max:255',
             'description' => 'nullable|string',
-            'address' => 'sometimes|required|string|max:255',
-            'city' => 'sometimes|required|string|max:255',
-            'years_of_experience' => 'sometimes|required|integer|min:0',
-            'center_thumbnail_url' => 'nullable|image|max:1024',
+            'address' => 'required|string|max:255',
+            'city' => 'required|string|max:255',
+            'years_of_experience' => 'required|integer|min:0',
+            'center_thumbnail_url' => 'nullable|image|max:2048', // Increased size for Cloudinary
         ]);
- \Log::info('=== Center UPDATE REQUEST START ===', [
-  
-        'input'     => $request->all(),
-        'files'     => $request->allFiles() ? array_keys($request->allFiles()) : [],
-    ]);
+
         $data = $validated;
 
         if ($request->hasFile('center_thumbnail_url')) {
-            if ($center->center_thumbnail_url) {
-                Storage::disk('public')->delete($center->center_thumbnail_url);
-            }
-            $data['center_thumbnail_url'] = $request->file('center_thumbnail_url')->store('centers', 'public');
+            // Use the reusable service
+            $url = $this->cloudinaryService->uploadFile(
+                $request->file('center_thumbnail_url'), 
+                'centers'
+            );
+            $data['center_thumbnail_url'] = $url;
         }
- \Log::info('=== Center UPDATE REQUEST START ===', [
-  
-        'input'     =>$data
-        
-    ]);
-        $center->update($data);
+
+        $center = Center::create($data);
+
+        $tutorId = auth()->id();
+        if ($tutorId) {
+            $center->tutors()->attach($tutorId);
+        }
 
         return new CenterResource($center);
     }
 
-    public function destroy(Center $center)
-    {
+   public function update(Request $request, Center $center)
+{
+    $validated = $request->validate([
+        'center_thumbnail_url' => 'nullable|image|max:2048',
+         'name' => 'sometimes|required|string|max:255',
+            'description' => 'nullable|string',
+            'address' => 'sometimes|required|string|max:255',
+            'city' => 'sometimes|required|string|max:255',
+            'years_of_experience' => 'sometimes|required|integer|min:0',
+           
+    ]);
+
+    $data = $validated;
+
+    if ($request->hasFile('center_thumbnail_url')) {
+        // 1. Delete the old image from Cloudinary
         if ($center->center_thumbnail_url) {
-            Storage::disk('public')->delete($center->center_thumbnail_url);
+            $this->cloudinaryService->deleteFile($center->center_thumbnail_url);
         }
-        $center->courses()->detach();
-        $center->delete();
-        return response()->json(['message' => 'Deleted']);
+
+        // 2. Upload the new image
+        $url = $this->cloudinaryService->uploadFile(
+            $request->file('center_thumbnail_url'), 
+            'centers'
+        );
+        $data['center_thumbnail_url'] = $url;
     }
+
+    $center->update($data);
+    return new CenterResource($center);
+}
+      public function destroy(Center $center)
+        {
+            // Delete image from Cloudinary if it exists
+            if ($center->center_thumbnail_url) {
+                $this->cloudinaryService->deleteFile($center->center_thumbnail_url);
+            }
+
+            $center->courses()->detach();
+            $center->delete();
+
+            return response()->json(['message' => 'Deleted successfully']);
+        }
 
     public function count(Request $request)
 {

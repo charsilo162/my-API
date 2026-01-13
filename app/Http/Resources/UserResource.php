@@ -19,10 +19,18 @@ class UserResource extends JsonResource
         'name'       => $this->name,
         'email'      => $this->email,
         'type'       => $this->type,
-        'photo_path' => $this->photo_path ? asset('storage/' . $this->photo_path) : null,
-        // Add the full URL here
-        'photo_url'  => $this->photo_path ? asset('storage/' . $this->photo_path) : null,
-        'created_at' => $this->created_at,
+        // 'photo_path' => $this->photo_path ? asset('storage/' . $this->photo_path) : null,
+        // // Add the full URL here
+        // 'photo_url'  => $this->photo_path ? asset('storage/' . $this->photo_path) : null,
+
+
+        'photo_path' => $this->photo_path && str_starts_with($this->photo_path, 'http') ? $this->photo_path
+            : ($this->photo_path ? asset('storage/' . $this->photo_path) : asset('storage/default-avatar.png')),
+            
+        'photo_url' => $this->photo_path && str_starts_with($this->photo_path, 'http') ? $this->photo_path
+            : ($this->photo_path ? asset('storage/' . $this->photo_path) : asset('storage/default-avatar.png')),
+            
+            'created_at' => $this->created_at,
     ];
 }
 }
