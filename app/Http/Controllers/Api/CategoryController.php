@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\CategoryResource;
 use App\Models\Category;
+use App\Services\CloudinaryService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
@@ -13,42 +14,12 @@ use Illuminate\Support\Str;
 
 class CategoryController extends Controller
 {
-//    public function index(Request $request)
-//     {
-//         $query = Category::query();
+  protected $cloudinaryService;
 
-//         // Search (for all components)
-//         if ($search = $request->query('search')) {
-//             $query->where('name', 'like', "%$search%")
-//                   ->orWhere('slug', 'like', "%$search%");
-//         }
-
-//         // With counts (e.g., for popular: courses_count)
-//         if ($withCount = $request->query('with_count')) {
-//             $query->withCount($withCount);
-//         }
-
-//         // Order by (e.g., courses_count desc for popular)
-//        if ($orderBy = $request->query('order_by')) {
-//             if (str_contains($orderBy, ',')) {
-//             [$field, $dir] = explode(',', $orderBy);
-//             } else {
-//             [$field, $dir] = explode(' ', $orderBy);
-//             }
-//             $dir = strtolower($dir) === 'asc' ? 'asc' : 'desc';
-//             $query->orderBy($field, $dir);
-//      }
-
-//         // Limit (for initial loads)
-//         if ($limit = $request->query('limit')) {
-//             $query->limit($limit);
-//         }
-
-//         // Pagination if needed (though your components use limit, not paginate)
-//         $categories = $query->get(); // Use get() for simple lists
-
-//         return CategoryResource::collection($categories);
-//     }
+    public function __construct(CloudinaryService $cloudinaryService)
+    {
+        $this->cloudinaryService = $cloudinaryService;
+    }
 
 public function index(Request $request)
     {
@@ -75,10 +46,13 @@ public function index(Request $request)
 
         return CategoryResource::collection($categories);
     }
+      public function show(Category $category)
+    {
+        return new CategoryResource($category);
+    }
+
     public function store(Request $request)
     {
-    //     \Log::info('FILES:', $request->allFiles());
-    // \Log::info('INPUT:', $request->all());
         $data = $request->validate([
             'name' => 'required|string|max:100',
             'thumbnail' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
@@ -90,7 +64,10 @@ public function index(Request $request)
         ];
 
         if ($request->hasFile('thumbnail')) {
-            $payload['thumbnail_url'] = $request->file('thumbnail')->store('categories', 'public');
+            $payload['thumbnail_url'] = $this->cloudinaryService->uploadFile(
+                $request->file('thumbnail'), 
+                'categories'
+            );
         }
 
         $category = Category::create($payload);
@@ -98,15 +75,9 @@ public function index(Request $request)
         return new CategoryResource($category);
     }
 
-    public function show(Category $category)
-    {
-        return new CategoryResource($category);
-    }
-
+  
     public function update(Request $request, Category $category)
     {
-    //     \Log::info('FILES:', $request->allFiles());
-    // \Log::info('INPUT:', $request->all());
         $data = $request->validate([
             'name' => 'sometimes|required|string|max:100',
             'thumbnail' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
@@ -121,9 +92,12 @@ public function index(Request $request)
 
         if ($request->hasFile('thumbnail')) {
             if ($category->thumbnail_url) {
-                Storage::disk('public')->delete($category->thumbnail_url);
+                $this->cloudinaryService->deleteFile($category->thumbnail_url);
             }
-            $payload['thumbnail_url'] = $request->file('thumbnail')->store('categories', 'public');
+            $payload['thumbnail_url'] = $this->cloudinaryService->uploadFile(
+                $request->file('thumbnail'), 
+                'categories'
+            );
         }
 
         $category->update($payload);
@@ -149,7 +123,7 @@ public function destroy(Category $category)
     
     // 2. Delete the thumbnail (as you already do)
     if ($category->thumbnail_url) {
-        Storage::disk('public')->delete($category->thumbnail_url);
+        $this->cloudinaryService->deleteFile($category->thumbnail_url);
     }
     
     // 3. Delete the category itself
@@ -157,7 +131,6 @@ public function destroy(Category $category)
 
     return response()->json(['message' => 'Category and its files successfully deleted.'], 200);
 }
-
 
     public function count(Request $request)
 {

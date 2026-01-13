@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\CourseResource;
 use App\Models\Course;
+use App\Services\CloudinaryService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -12,6 +13,14 @@ use Illuminate\Support\Str;
 
 class CourseController extends Controller
 {
+
+    protected $cloudinaryService;
+
+    public function __construct(CloudinaryService $cloudinaryService)
+    {
+        $this->cloudinaryService = $cloudinaryService;
+    }
+
 public function index(Request $request)
 {
     $query = Course::query();
@@ -103,40 +112,6 @@ public function index(Request $request)
 
     return CourseResource::collection($courses);
 }
-
-
-    public function store(Request $request)
-    {
-        $validated = $request->validate([
-            'category_id' => 'required|integer|exists:categories,id',
-            'title' => 'required|string|max:100|unique:courses,title',
-            'description' => 'required|string',
-            'type' => 'required|in:physical,online',
-            'center_id' => $request->type === 'physical' ? 'required|integer|exists:centers,id' : 'nullable',
-            'image_thumb' => 'nullable|image|max:1024',
-            'publish' => 'boolean',
-        ]);
-
-        $data = $validated;
-        $data['uploader_user_id'] = auth()->id();
-        $data['publish'] = $validated['publish'] ?? false;
-
-        if ($request->hasFile('image_thumb')) {
-            $data['image_thumbnail_url'] = $request->file('image_thumb')->store('courses', 'public');
-        }
-
-        $course = Course::create($data);
-
-        if ($request->type === 'physical' && $request->center_id) {
-            $course->centers()->attach($request->center_id, [
-                'price' => null,
-                'start_date' => null,
-                'end_date' => null,
-            ]);
-        }
-
-        return new CourseResource($course->fresh('centers'));
-    }
 public function edit($id)  // ← Remove model binding!
 {
     // dd($id);
@@ -151,11 +126,6 @@ public function edit($id)  // ← Remove model binding!
     return new CourseResource($course);
 }
 
-    // public function show(Course $course)
-    // {
-    //     $course->load('centers');
-    //     return new CourseResource($course);
-    // }
 
 public function show(Course $course)
 {
@@ -186,71 +156,100 @@ public function show(Course $course)
     ]);
 
     return new CourseResource($course);
-} /**
+} 
+
+    public function store(Request $request)
+        {
+            $validated = $request->validate([
+                'category_id'  => 'required|integer|exists:categories,id',
+                'title'        => 'required|string|max:100|unique:courses,title',
+                'description'  => 'required|string',
+                'type'         => 'required|in:physical,online',
+                'center_id'    => $request->type === 'physical' ? 'required|integer|exists:centers,id' : 'nullable',
+                'image_thumb'  => 'nullable|image|max:5120',
+                'publish'      => 'boolean',
+                'price_amount' => 'required|numeric|min:0', // Added validation for price
+            ]);
+
+            $data = $validated;
+            $data['uploader_user_id'] = auth()->id();
+            $data['publish'] = $validated['publish'] ?? false;
+            
+            // Auto-generate slug (to match your update logic)
+            $data['slug'] = \Str::slug($validated['title']);
+
+            if ($request->hasFile('image_thumb')) {
+                $data['image_thumbnail_url'] = $this->cloudinaryService->uploadFile(
+                    $request->file('image_thumb'), 
+                    'courses'
+                );
+            }
+
+            // Create the Course
+            $course = Course::create($data);
+
+            // 1. Handle price creation (New)
+            if ($request->filled('price_amount')) {
+                $course->price()->create([
+                    'amount' => $request->price_amount
+                ]);
+            }
+
+            // 2. Handle center attachment
+            if ($request->type === 'physical' && $request->center_id) {
+                $course->centers()->attach($request->center_id, [
+                    'price' => null,
+                    'start_date' => null,
+                    'end_date' => null,
+                ]);
+            }
+
+            // Return with centers and the price relationship loaded
+            return new CourseResource($course->fresh(['centers', 'price']));
+        }
+
+/**
  * Update course using raw ID — completely bypasses slug binding
  */
 public function update(Request $request, $id)
 {
-    Log::info('=== COURSE UPDATE REQUEST START ===', [
-        'course_id' => $id,
-        'user_id'   => auth()->id(),
-        'input'     => $request->all(),
-        'files'     => $request->allFiles() ? array_keys($request->allFiles()) : [],
-    ]);
-
     $course = Course::findOrFail($id);
-    try {
-        $validated = $request->validate([
-            'category_id' => 'sometimes|required|integer|exists:categories,id',
-            'title'       => 'sometimes|required|string|max:100|unique:courses,title,' . $course->id,
-            'description' => 'sometimes|required|string',
-            'type'        => 'sometimes|required|in:physical,online',
-            'center_id'   => 'nullable|integer|exists:centers,id',
-            // 'image_thumb' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
-            'image_thumb' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:5120',
-            'publish'     => 'sometimes|boolean',
-            'price_amount' => 'sometimes|numeric|min:0', // New: Validate price amount
-        ]);
 
-       Log::info('Validation passed', $validated);
-    } catch (\Illuminate\Validation\ValidationException $e) {
-    Log::error('Validation failed', $e->errors());
-        // throw $e;
-    }
+    $validated = $request->validate([
+        'category_id' => 'sometimes|required|integer|exists:categories,id',
+        'title'       => 'sometimes|required|string|max:100|unique:courses,title,' . $course->id,
+        'description' => 'sometimes|required|string',
+        'type'        => 'sometimes|required|in:physical,online',
+        'center_id'   => 'nullable|integer|exists:centers,id',
+        'image_thumb' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:5120',
+        'publish'     => 'sometimes|boolean',
+        'price_amount' => 'sometimes|numeric|min:0', // New: Validate price amount
+    ]);
 
     $data = $validated;
 
     // Auto-generate slug
     if (isset($data['title'])) {
         $data['slug'] = \Str::slug($data['title']);
-       // \Log::info('Slug generated', ['slug' => $data['slug']]);
     }
 
     // Handle image upload
     if ($request->hasFile('image_thumb')) {
-        $file = $request->file('image_thumb');
-        // \Log::info('Image received', [
-        //     'original_name' => $file->getClientOriginalName(),
-        //     'size'          => $file->getSize(),
-        // ]);
-
         if ($course->image_thumbnail_url) {
-            \Storage::disk('public')->delete($course->image_thumbnail_url);
-        //    \Log::info('Old image deleted', ['path' => $course->image_thumbnail_url]);
+            $this->cloudinaryService->deleteFile($course->image_thumbnail_url);
         }
 
-        $path = $file->store('courses', 'public');
-        $data['image_thumbnail_url'] = $path;
-      //  \Log::info('New image stored', ['path' => $path]);
+        $data['image_thumbnail_url'] = $this->cloudinaryService->uploadFile(
+            $request->file('image_thumb'), 
+            'courses'
+        );
     }
 
     // Final data for update (exclude price_amount from course update)
     unset($data['price_amount']);
-   // \Log::info('Final data for update', $data);
 
     // Update the course
     $course->update($data);
-  //  \Log::info('Course updated in DB', $course->fresh()->toArray());
 
     // Handle price update (New)
     if ($request->filled('price_amount')) {
@@ -258,22 +257,18 @@ public function update(Request $request, $id)
             ['course_id' => $course->id], // Assuming standard hasOne setup
             ['amount' => $request->price_amount]
         );
-        \Log::info('Price updated/created', ['amount' => $request->price_amount]);
     }
 
     // Handle centers
     if ($request->filled('type')) {
         if ($request->type === 'physical' && $request->filled('center_id')) {
             $course->centers()->sync([$request->center_id]);
-        //    \Log::info('Center attached', ['center_id' => $request->center_id]);
         } elseif ($request->type === 'online') {
             $course->centers()->detach();
-         //   \Log::info('All centers detached (online course)');
         }
     }
 
     $freshCourse = $course->fresh(['centers', 'category', 'currentPrice']);
-  //  \Log::info('=== COURSE UPDATE SUCCESS ===', $freshCourse->toArray());
 
     return new CourseResource($freshCourse);
 }
@@ -282,17 +277,16 @@ public function update(Request $request, $id)
     public function destroy(Course $course)
     {
         if ($course->image_thumbnail_url) {
-            Storage::disk('public')->delete($course->image_thumbnail_url);
+            $this->cloudinaryService->deleteFile($course->image_thumbnail_url);
         }
 
         $course->centers()->detach();
         $course->delete();
 
         return response()->json([
-            'message' => 'Course deleted successfully'
+            'message' => 'Course and associated cloud images deleted successfully'
         ]);
     }
-
     public function togglePublish(Course $course)
 {
     // Security: Only uploader can toggle
@@ -320,26 +314,63 @@ public function watch(Course $course)
     return new CourseResource($course);
 }
 
-// app/Http/Controllers/Api/CourseController.php
+// public function noVideos(Request $request)
+// {
+//     $query = Course::query()
+//         ->where('uploader_user_id', auth()->id())
+//         ->whereDoesntHave('videos')
+//         ->with(['category', 'centers']);
+
+//     if ($request->filled('search')) {
+//         $query->where('title', 'like', "%{$request->search}%");
+//     }
+
+//     return CourseResource::collection(
+//         $query->latest()->paginate(12)
+//     );
+// }
+
+
 
 public function noVideos(Request $request)
 {
+    $userId = auth('sanctum')->id();
+
     $query = Course::query()
-        ->where(function ($q) {
-            $q->where('uploader_user_id', auth()->id())
-              ->orWhere('assigned_tutor_id', auth()->id());
-        })
-        ->with(['category', 'centers'])   // ← THIS LINE MUST BE HERE
-        ->withCount('videos')
-        ->doesntHave('videos');
+        ->where('uploader_user_id', $userId)
+        ->whereDoesntHave('videos')
+        ->with(['category', 'centers']);
+
     if ($request->filled('search')) {
-     $query->where('title', 'like', '%' . $request->search . '%');
- }
+        $query->where('title', 'like', "%{$request->search}%");
+    }
 
- $courses = $query->latest()->paginate(12);
-
- return CourseResource::collection($courses);
+    return CourseResource::collection(
+        $query->latest()->paginate(12)
+    );
 }
+
+
+
+
+// public function noVideos(Request $request)
+// {
+//     $query = Course::query()
+//         ->where(function ($q) {
+//             $q->where('uploader_user_id', auth()->id())
+//               ->orWhere('assigned_tutor_id', auth()->id());
+//         })
+//         ->with(['category', 'centers'])   // ← THIS LINE MUST BE HERE
+//         ->withCount('videos')
+//         ->doesntHave('videos');
+//     if ($request->filled('search')) {
+//      $query->where('title', 'like', '%' . $request->search . '%');
+//  }
+
+//  $courses = $query->latest()->paginate(12);
+
+//  return CourseResource::collection($courses);
+// }
 
 
 

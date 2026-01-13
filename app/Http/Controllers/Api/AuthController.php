@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\CourseResource;
 use App\Models\User;
+use App\Services\CloudinaryService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Auth;
@@ -11,46 +12,51 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 class AuthController extends Controller
 {
+     protected $cloudinaryService;
+
+    public function __construct(CloudinaryService $cloudinaryService)
+    {
+        $this->cloudinaryService = $cloudinaryService;
+    }
     
     public function register(Request $request)
-{
-    // 1. Add 'photo' validation rule
-    $data = $request->validate([
-        'name' => 'required|string|max:255',
-        'email' => 'required|email|unique:users',
-        'type' => 'required|in:user,center,tutor',
-        'password' => 'required|min:6|confirmed',
-        'photo' => 'nullable|image|max:2048', // Optional image, max 2MB
-    ]);
+    {
+        // 1. Add 'photo' validation rule
+        $data = $request->validate([
+            'name' => 'required|string|max:255',
+            'email' => 'required|email|unique:users',
+            'type' => 'required|in:user,center,tutor',
+            'password' => 'required|min:6|confirmed',
+            'photo' => 'nullable|image|max:2048', // Optional image, max 2MB
+        ]);
 
-    // Initialize an array for user creation data
-    $userData = [
-        'name' => $data['name'],
-        'type' => $data['type'],
-        'email' => $data['email'],
-        'password' => Hash::make($data['password']),
-    ];
-    
-    // 2. Check if a file exists in the request
-    if ($request->hasFile('photo')) {
-         $photoPath = $request->file('photo')->store('profile_photos', 'public');
+        // Initialize an array for user creation data
+        $userData = [
+            'name' => $data['name'],
+            'type' => $data['type'],
+            'email' => $data['email'],
+            'password' => Hash::make($data['password']),
+        ];
         
-        // Add the path to the user creation data
-        $userData['photo_path'] = $photoPath; 
-        
-           }
+        // 2. Check if a file exists in the request
+        if ($request->hasFile('photo')) {
+            $userData['photo_path'] = $this->cloudinaryService->uploadFile(
+                $request->file('photo'), 
+                'profile_photos'
+            ); 
+        }
 
-    $user = User::create($userData);
+        $user = User::create($userData);
 
-    $token = $user->createToken('api')->plainTextToken;
+        $token = $user->createToken('api')->plainTextToken;
 
-    return response()->json([
-        'user' => $user,
-        'token' => $token,
-    ], 201);
-}
+        return response()->json([
+            'user' => $user,
+            'token' => $token,
+        ], 201);
+    }
 
-public function updateProfile(Request $request)
+    public function updateProfile(Request $request)
     {
         $user = $request->user();
 
@@ -72,13 +78,19 @@ public function updateProfile(Request $request)
         if ($request->hasFile('photo')) {
             // Optionally delete the old photo if it exists
             if ($user->photo_path) {
-                Storage::disk('public')->delete($user->photo_path);
+                $this->cloudinaryService->deleteFile($user->photo_path);
             }
 
-            // Store the new photo
-            $data['photo_path'] = $request->file('photo')->store('profile_photos', 'public');
+            // Upload new photo
+            $data['photo_path'] = $this->cloudinaryService->uploadFile(
+                $request->file('photo'), 
+                'profile_photos'
+            );
         }
 
+        // Remove the 'photo' file object from the data array so it doesn't interfere with update
+        unset($data['photo']);
+        
         // Update the user with the provided data
         $user->update($data);
 
@@ -114,12 +126,12 @@ public function login(Request $request)
 }
  public function logout()
 {
-    \Log::alert('API LOGOUT HIT — USER ID: ' . auth()->id());
-    \Log::info('Tokens before delete:', ['count' => auth()->user()->tokens()->count()]);
+    // \Log::alert('API LOGOUT HIT — USER ID: ' . auth()->id());
+    // \Log::info('Tokens before delete:', ['count' => auth()->user()->tokens()->count()]);
 
     auth()->user()->tokens()->delete();
 
-    \Log::alert('ALL TOKENS DELETED — LOGOUT SUCCESSFUL');
+    //\Log::alert('ALL TOKENS DELETED — LOGOUT SUCCESSFUL');
 
     return response()->json(['message' => 'Logged out successfully']);
 }
