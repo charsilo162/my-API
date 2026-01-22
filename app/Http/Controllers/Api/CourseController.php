@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\CourseEnrollmentResource;
 use App\Http\Resources\CourseResource;
 use App\Models\Course;
 use App\Services\CloudinaryService;
@@ -285,17 +286,17 @@ public function watch(Course $course)
     // if (!auth()->check() || !$course->users()->where('user_id', auth()->id())->exists()) {
     //     abort(403, 'You are not enrolled in this course.');
     // }
-     Log::info('User logged in', [
-            'user_id' =>$course,
+    //  Log::info('User logged in', [
+    //         'user_id' =>$course,
            
-            ]);
+    //         ]);
     $course->load([
         'videos' => fn($q) => $q->orderByPivot('order_index')->withPivot('order_index')
     ]);
- Log::info('User ', [
-            'user' =>$course,
+//  Log::info('User ', [
+//             'user' =>$course,
            
-            ]);
+//             ]);
     return new CourseResource($course);
 }
 
@@ -332,4 +333,64 @@ public function publish(Course $course)
 
     return new CourseResource($course);
 }
+
+
+
+public function myCourseEnrollments(Request $request)
+{
+    $user = $request->user();
+log::info('MY COURSE ENROLLMENTS REQUEST', [
+    'user_id' => $user,
+    'request' => $request->all(),
+]);
+    $courses = Course::query()
+        ->where('uploader_user_id', $user->id)
+
+        // Filter by course
+        ->when($request->filled('course_id'), function ($q) use ($request) {
+            $q->where('id', $request->course_id);
+        })
+
+        // Filter by category
+        ->when($request->filled('category_id'), function ($q) use ($request) {
+            $q->where('category_id', $request->category_id);
+        })
+
+        ->with([
+            'category',
+
+            'students' => function ($q) use ($request) {
+
+                // Search student
+                if ($request->filled('search')) {
+                    $q->where(function ($sub) use ($request) {
+                        $sub->where('users.name', 'like', "%{$request->search}%")
+                            ->orWhere('users.email', 'like', "%{$request->search}%");
+                    });
+                }
+
+                // Min amount
+                if ($request->filled('min_amount')) {
+                    $q->wherePivot('paid_amount', '>=', $request->min_amount);
+                }
+
+                // Date range
+                if ($request->filled('from_date')) {
+                    $q->wherePivot('paid_at', '>=', $request->from_date);
+                }
+
+                if ($request->filled('to_date')) {
+                    $q->wherePivot('paid_at', '<=', $request->to_date);
+                }
+
+                $q->select('users.id', 'users.name', 'users.email')
+                  ->withPivot(['payment_reference', 'paid_amount', 'paid_at']);
+            }
+        ])
+        ->paginate(10);
+
+    return CourseEnrollmentResource::collection($courses);
+}
+
+
 }

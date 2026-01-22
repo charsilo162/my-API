@@ -11,17 +11,12 @@ return new class extends Migration
      */
     public function up(): void
     {
-       Schema::create('centers', function (Blueprint $table) {
+       Schema::create('bookshops', function (Blueprint $table) {
             $table->id();
-            
-            // Core Center Information
-            $table->string('name', 100);
+            $table->foreignId('vendor_id')->constrained()->onDelete('cascade');
+            $table->string('shop_name');
             $table->string('address');
-            $table->text('description')->nullable();
-            $table->string('city', 50)->nullable();
-            $table->unsignedSmallInteger('years_of_experience')->default(0);
-            $table->string('center_thumbnail_url')->nullable();
-
+            $table->string('city');
             $table->timestamps();
         });
     }
@@ -31,6 +26,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('centers');
+        Schema::dropIfExists('bookshops');
     }
 };

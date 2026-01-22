@@ -11,19 +11,12 @@ return new class extends Migration
      */
     public function up(): void
     {
-    Schema::create('tutors', function (Blueprint $table) {
+       Schema::create('vendors', function (Blueprint $table) {
             $table->id();
-
-            // The Tutor MUST be linked to a User account
-            $table->foreignId('user_id')
-                  ->unique() // One user can only be one tutor
-                  ->constrained('users')
-                  ->onDelete('cascade');
-
-            // Professional Details
+            $table->foreignId('user_id')->constrained()->onDelete('cascade');
+            $table->string('store_name');
             $table->text('bio')->nullable();
-            $table->unsignedSmallInteger('experience_years')->default(0);
-
+            $table->decimal('balance', 15, 2)->default(0.00); // For vendor earnings
             $table->timestamps();
         });
     }
@@ -33,6 +26,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('tutors');
+        Schema::dropIfExists('vendors');
     }
 };

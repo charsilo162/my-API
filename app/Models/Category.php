@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Str;
 
 class Category extends Model
 {
@@ -13,19 +14,22 @@ class Category extends Model
     /**
      * Get the courses for the category.
      */
-      protected $fillable = ['name', 'slug', 'thumbnail_url'];
+   protected $fillable = ['name', 'slug'];
 
+  
     protected static function boot()
     {
         parent::boot();
 
-        static::creating(fn($c) => $c->slug = \Str::slug($c->name));
+        static::creating(fn($c) => $c->slug = Str::slug($c->name));
         static::updating(function ($c) {
-            if ($c->isDirty('name')) $c->slug = \Str::slug($c->name);
+            if ($c->isDirty('name')) $c->slug = Str::slug($c->name);
         });
     }
-    public function courses(): HasMany
+
+      public function books()
     {
-        return $this->hasMany(Course::class);
+        return $this->hasMany(Book::class);
     }
+ 
 }

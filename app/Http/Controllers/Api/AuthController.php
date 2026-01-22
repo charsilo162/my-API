@@ -54,6 +54,10 @@ class AuthController extends Controller
    public function updateProfile(Request $request)
         {
             $user = $request->user();
+//  Log::info('Incoming user request', [
+//     'data'  => $request->all(),
+//     'files' => $request->file(),
+// ]);
 
             $data = $request->validate([
                 'name'     => 'sometimes|string|max:255',

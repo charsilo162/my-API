@@ -38,23 +38,7 @@ class User extends Authenticatable
      *
      * @return bool
      */
-    public function isAdmin(): bool
-    {
-        return $this->type === 'admin';
-    }
-    /**
-     * A User can be a Tutor.
-     */
-    public function tutor(): HasOne
-    {
-        return $this->hasOne(Tutor::class);
-    }
-    public function videos()
-        {
-            // If your foreign key in 'videos' table is 'tutor_id'
-            return $this->hasMany(Video::class, 'uploader_user_id');
-        }
-        
+  
     /**
      * Get all likes made by the User.
      */
@@ -79,18 +63,26 @@ class User extends Authenticatable
         return $this->hasMany(Share::class);
     }
 
-        public function courses()
-    {
-        // Assuming a many-to-many relationship via the 'course_user' pivot table
-        return $this->belongsToMany(Course::class, 'course_user');
-    }
 
-public function enrolledCourses()
-    {
-        // Assumes a 'course_user' pivot table
-        return $this->belongsToMany(Course::class, 'course_user', 'user_id', 'course_id')->withTimestamps();
-    }
+ 
+// app/Models/User.php
+        public function library()
+        {
+            return $this->hasMany(UserLibrary::class);
+        }
+        public function libraryBooks()
+        {
+            // This allows $user->libraryBooks to return the actual Book objects
+            return $this->hasManyThrough(Book::class, UserLibrary::class, 'user_id', 'id', 'id', 'book_id');
+        }
+        public function vendorProfile()
+        {
+            return $this->hasOne(Vendor::class);
+        }
 
-
+        public function orders()
+        {
+            return $this->hasMany(Order::class);
+        }
 
 }

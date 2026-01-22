@@ -9,60 +9,66 @@ use App\Http\Controllers\Api\CenterController;
 use App\Http\Controllers\Api\CommentController;
 use App\Http\Controllers\Api\LikeController;
 use App\Http\Controllers\Api\PaymentApiController;
+use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\ShareController;
 use App\Http\Controllers\Api\StatsController;
+use App\Http\Controllers\Api\UserLibraryController;
+use App\Http\Controllers\Api\VendorApiController;
 
-// ====================================
-// PUBLIC ROUTES (NO LOGIN REQUIRED)
-// ====================================
+    // ====================================
+    // PUBLIC ROUTES (NO LOGIN REQUIRED)
+    // ====================================
 
-Route::get('/test', fn() => response()->json(['message' => 'API IS WORKING!']));
+    Route::get('/test', fn() => response()->json(['message' => 'API IS WORKING!']));
 
-// Categories & Centers (public)
-Route::get('/categories', [CategoryController::class, 'index']);
-Route::get('/categories/count', [CategoryController::class, 'count']);
-Route::get('/categories/{category}', [CategoryController::class, 'show']); // GET /api/categories/{id} (single)
-
-
-
-Route::get('centers/count', [CenterController::class, 'count']);
-Route::apiResource('centers', CenterController::class)->only(['index', 'show']);
-
-// Courses (public index + show)
- Route::get('courses/without-videos', [CourseController::class, 'noVideos']);
-Route::get('courses/count', [CategoryController::class, 'count']);
-Route::apiResource('courses', CourseController::class)->only(['index', 'show']);
-
-// COMMENTS: READ = PUBLIC, WRITE = PROTECTED
-Route::get('comments', [CommentController::class, 'index']);        // ← Public: everyone sees
-Route::get('likes', [LikeController::class, 'show']);               // ← Public
-Route::get('shares/count', [ShareController::class, 'count']);      // ← Public
-
-// Auth (public)
-Route::post('/login', [AuthController::class, 'login']);
-Route::post('/register', [AuthController::class, 'register']);
+    // Categories & Centers (public)
+    Route::get('/categories', [CategoryController::class, 'index']);
+    Route::get('/categories/count', [CategoryController::class, 'count']);
+    Route::get('/categories/{category}', [CategoryController::class, 'show']); // GET /api/categories/{id} (single)
 
 
-Route::get('/payment/callback', [PaymentApiController::class, 'callback']);
+        // Courses (public index + show)
+        Route::get('courses/without-videos', [CourseController::class, 'noVideos']);
+        Route::get('courses/count', [CategoryController::class, 'count']);
+        Route::apiResource('courses', CourseController::class)->only(['index', 'show']);
 
-// ====================================
-// PROTECTED ROUTES (REQUIRES LOGIN)
-// ====================================
-Route::middleware('auth:sanctum')->group(function () {
-Route::post('categories', [CategoryController::class, 'store']);
-Route::apiResource('categories', CategoryController::class)->except(['index', 'show']);
+        // COMMENTS: READ = PUBLIC, WRITE = PROTECTED
+        Route::get('comments', [CommentController::class, 'index']);        // ← Public: everyone sees
+        Route::get('likes', [LikeController::class, 'show']);               // ← Public
+        Route::get('shares/count', [ShareController::class, 'count']);      // ← Public
 
-    Route::post('/logout', [AuthController::class, 'logout']);
-    Route::get('/me/enrolled-courses', [AuthController::class, 'enrolledCourses']);
-    Route::put('/me/profile', [AuthController::class, 'updateProfile']);
+        // Auth (public)
+        Route::post('/login', [AuthController::class, 'login']);
+        Route::post('/register', [AuthController::class, 'register']);
+
+        Route::post('/payment/webhook', [PaymentController::class, 'handleWebhook']);
+        Route::get('/payment/callback', [PaymentController::class, 'callback'])->name('payment.callback');
+        // ====================================
+        // PROTECTED ROUTES (REQUIRES LOGIN)
+        // ====================================
+    Route::middleware('auth:sanctum')->group(function () {
+    Route::post('categories', [CategoryController::class, 'store']);
+    Route::apiResource('categories', CategoryController::class)->except(['index', 'show']);
+
+
+    Route::get('/vendor/profile', [VendorApiController::class, 'profile']);
+    Route::post('/vendor/register', [VendorApiController::class, 'registerVendor']);
+
+    // Bookshop Management (Physical Locations)
+    Route::get('/vendor/shops', [VendorApiController::class, 'listShops']);
+    Route::post('/vendor/shops', [VendorApiController::class, 'addShop']);
+    Route::delete('/vendor/shops/{bookshop}', [VendorApiController::class, 'deleteShop']);
+
+
+
+Route::post('/logout', [AuthController::class, 'logout']);
+Route::get('/me/enrolled-courses', [AuthController::class, 'enrolledCourses']);
+Route::put('/me/profile', [AuthController::class, 'updateProfile']);
     // Route::post('/me/profile', [AuthController::class, 'updateProfile']);
 
 
 
-    Route::middleware('auth:sanctum')->post('/payment/initialize', [PaymentApiController::class, 'initialize']);
-
-
-
+    Route::middleware('auth:sanctum')->post('/payment/initialize', [PaymentController::class, 'initialize']);
     // ONLY LOGGED-IN USERS CAN POST COMMENTS
     Route::get('stats', [StatsController::class, 'index']);     // ← PROTECTED
     Route::post('comments', [CommentController::class, 'store']);     // ← PROTECTED
@@ -70,27 +76,8 @@ Route::apiResource('categories', CategoryController::class)->except(['index', 's
     // Likes & Shares (require login)
     Route::post('likes/toggle', [LikeController::class, 'toggle']);
     Route::post('shares', [ShareController::class, 'store']);
-
-    // Admin routes...
-    // Route::get('/courses/{course}/edit', [CourseController::class, 'edit'])
-    //  ->name('api.courses.edit');
-    Route::put('/courses/{id}/update', [CourseController::class, 'update'])
-     ->name('api.courses.update');
-     
-
-     Route::get('/courses/{id}/edit', [CourseController::class, 'edit'])
-     ->name('api.courses.edit');
-    Route::apiResource('courses', CourseController::class)->except(['index', 'show']);
-    Route::apiResource('centers', CenterController::class)->except(['index', 'show', 'count']);
-
-    Route::put('courses/{course}/toggle-publish', [CourseController::class, 'togglePublish']);
-    Route::put('courses/{course}/publish', [CourseController::class, 'publish']);
-    Route::get('courses/{course}/watch', [CourseController::class, 'watch']);
-   Route::apiResource('videos', VideoController::class)->only(['index', 'show', 'update', 'destroy']);
-    Route::post('videos', [VideoController::class, 'store']);
-    Route::put('videos/{video}/toggle-publish', [VideoController::class, 'togglePublish']);
-
-
+    Route::get('/my-library', [UserLibraryController::class, 'index']);
+    Route::get('/my-library/{libraryItem}/download', [UserLibraryController::class, 'download']);
 });
 
 

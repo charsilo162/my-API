@@ -1,155 +1,122 @@
 <?php
-
 namespace App\Http\Controllers\Api;
+
 use App\Http\Controllers\Controller;
 use App\Http\Resources\CategoryResource;
 use App\Models\Category;
 use App\Services\CloudinaryService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class CategoryController extends Controller
 {
+    protected $cloudinaryService;
 
-protected $cloudinaryService;
+    public function __construct(CloudinaryService $cloudinaryService)
+    {
+        $this->cloudinaryService = $cloudinaryService;
+    }
 
-public function __construct(CloudinaryService $cloudinaryService)
-{
-    $this->cloudinaryService = $cloudinaryService;
-}
-public function index(Request $request)
+    public function index(Request $request)
     {
         $query = Category::query();
 
-        // Handle with_count (e.g., 'courses')
-        if ($withCount = $request->query('with_count')) {
-            $relations = explode(',', $withCount);
-            $query->withCount($relations);
+        // Count books in each category (E-book requirement)
+        if ($request->has('with_count')) {
+            $query->withCount('books');
         }
 
-        // Search
+        // Search by name
         if ($search = $request->query('search')) {
-            $query->where('name', 'like', "%{$search}%")
-                  ->orWhere('slug', 'like', "%{$search}%");
+            $query->where('name', 'like', "%{$search}%");
         }
 
-        // Order by (e.g., 'courses_count,desc')
+        // Sorting
         if ($orderBy = $request->query('order_by')) {
             [$field, $direction] = explode(',', $orderBy);
             $query->orderBy($field, $direction ?? 'asc');
         }
 
-        // Limit (for non-paginated, limited fetches like top 6)
+        // Limit for homepage "Top Categories"
         if ($limit = $request->query('limit')) {
-            $categories = $query->limit($limit)->get();
-            return CategoryResource::collection($categories);
+            return CategoryResource::collection($query->limit($limit)->get());
         }
 
-        // Fallback to pagination if no limit
-        $perPage = $request->query('per_page', 10);
-        $page = $request->query('page', 1);
-        $categories = $query->paginate($perPage, ['*'], 'page', $page);
-
-        return CategoryResource::collection($categories);
-    }
-    
-    public function show(Category $category)
-    {
-        return new CategoryResource($category);
+        return CategoryResource::collection($query->paginate($request->query('per_page', 15)));
     }
 
     public function store(Request $request)
-        {
-            $data = $request->validate([
-                'name' => 'required|string|max:100',
-                'thumbnail' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
-            ]);
+    {
+        $data = $request->validate([
+            'name' => 'required|string|max:100|unique:categories,name',
+            'thumbnail' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
+        ]);
 
-            $payload = [
-                'name' => $data['name'],
-                'slug' => \Str::slug($data['name']),
-            ];
+        $payload = [
+            'name' => $data['name'],
+            'slug' => Str::slug($data['name']),
+        ];
 
-            if ($request->hasFile('thumbnail')) {
-                // Use Cloudinary instead of local storage
-                $payload['thumbnail_url'] = $this->cloudinaryService->uploadFile(
-                    $request->file('thumbnail'), 
-                    'categories'
-                );
-            }
-
-            $category = Category::create($payload);
-
-            return new CategoryResource($category);
+        if ($request->hasFile('thumbnail')) {
+            $payload['thumbnail_url'] = $this->cloudinaryService->uploadFile(
+                $request->file('thumbnail'), 
+                'categories'
+            );
         }
 
+        $category = Category::create($payload);
 
-  public function update(Request $request, Category $category)
-        {
-            $data = $request->validate([
-                'name' => 'sometimes|required|string|max:100',
-                'thumbnail' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
-            ]);
+        return new CategoryResource($category);
+    }
 
-            $payload = [];
+    public function show(Category $category)
+    {
+        // Load books when viewing a specific category
+        return new CategoryResource($category->loadCount('books'));
+    }
 
-            if (isset($data['name'])) {
-                $payload['name'] = $data['name'];
-                $payload['slug'] = \Str::slug($data['name']);
-            }
+    public function update(Request $request, Category $category)
+    {
+        $data = $request->validate([
+            'name' => 'sometimes|required|string|max:100|unique:categories,name,' . $category->id,
+            'thumbnail' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
+        ]);
 
-            if ($request->hasFile('thumbnail')) {
-                // 1. Delete old image from Cloudinary
-                if ($category->thumbnail_url) {
-                    $this->cloudinaryService->deleteFile($category->thumbnail_url);
-                }
-                
-                // 2. Upload new image to Cloudinary
-                $payload['thumbnail_url'] = $this->cloudinaryService->uploadFile(
-                    $request->file('thumbnail'), 
-                    'categories'
-                );
-            }
-
-            $category->update($payload);
-
-            return new CategoryResource($category);
+        if (isset($data['name'])) {
+            $category->name = $data['name'];
+            $category->slug = Str::slug($data['name']);
         }
 
-public function destroy(Category $category)
-{
-    if ($category->courses()->exists()) {
-        return response()->json([
-            'message' => 'Cannot delete category. It has ' . $category->courses()->count() . ' courses still linked.',
-            'action_required' => 'Reassign or delete the courses first.',
-        ], 409);
-    }
-    
-    // Delete from Cloudinary
-    if ($category->thumbnail_url) {
-        $this->cloudinaryService->deleteFile($category->thumbnail_url);
-    }
-    
-    $category->delete();
+        if ($request->hasFile('thumbnail')) {
+            if ($category->thumbnail_url) {
+                $this->cloudinaryService->deleteFile($category->thumbnail_url);
+            }
+            $category->thumbnail_url = $this->cloudinaryService->uploadFile(
+                $request->file('thumbnail'), 
+                'categories'
+            );
+        }
 
-    return response()->json(['message' => 'Category and its files successfully deleted.'], 200);
-}
+        $category->save();
 
-    public function count(Request $request)
-{
-    $query = Category::query();
-
-    // Optional: filter by search (same logic as index)
-    if ($search = $request->query('search')) {
-        $query->where('name', 'like', "%$search%")
-              ->orWhere('slug', 'like', "%$search%");
+        return new CategoryResource($category);
     }
 
-    $total = $query->count();
+    public function destroy(Category $category)
+    {
+        // Prevent deletion if books are linked to this category
+        if ($category->books()->exists()) {
+            return response()->json([
+                'message' => "Cannot delete. Category is linked to {$category->books()->count()} books.",
+            ], 409);
+        }
 
-    return response()->json([
-        'total' => $total,
-        'search' => $search ?? null,
-    ]);
-}
+        if ($category->thumbnail_url) {
+            $this->cloudinaryService->deleteFile($category->thumbnail_url);
+        }
+
+        $category->delete();
+
+        return response()->json(['message' => 'Category deleted successfully.']);
+    }
 }
