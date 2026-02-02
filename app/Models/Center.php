@@ -21,6 +21,7 @@ class Center extends Model
             'name',
             'address',
             'city',
+            'is_active',
             'description',
             'years_of_experience',
             'center_thumbnail_url',
@@ -30,6 +31,13 @@ class Center extends Model
      * Get the courses physically offered by the Center.
 
      */
+    protected static function booted()
+        {
+            static::addGlobalScope('active', function ($builder) {
+                // Automatically hide any center where is_active is false
+                $builder->where('is_active', true);
+            });
+        }
 
     public function courses(): BelongsToMany
 

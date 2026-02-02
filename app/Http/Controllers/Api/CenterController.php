@@ -6,6 +6,8 @@ use App\Http\Resources\CenterResource;
 use App\Models\Center;
 use App\Services\CloudinaryService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
 class CenterController extends Controller
@@ -83,7 +85,7 @@ public function index(Request $request)
         $center = Center::create($data);
 
         // Attach the logged-in user's ID as the tutor_id to the center
-        $tutorId = auth()->id(); // Assumes the authenticated user is a tutor
+        $tutorId = Auth::id(); // Assumes the authenticated user is a tutor
         if ($tutorId) {
             $center->tutors()->attach($tutorId);
         }
@@ -103,6 +105,12 @@ public function index(Request $request)
             'years_of_experience' => 'sometimes|required|integer|min:0',
             'center_thumbnail_url' => 'nullable|image|max:2048',
         ]);
+
+           Log::info('AUTH DEBUG', [
+                'Re' => $request,
+                'validate'       => $validated,
+                'center'         => $center,
+            ]);
 
         $data = $validated;
 

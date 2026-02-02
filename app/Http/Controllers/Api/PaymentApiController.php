@@ -133,14 +133,17 @@ class PaymentApiController extends Controller
         DB::commit();
 
         $successMessage = 'Payment successful and enrollment complete!';
- Log::info('course:', ['count' => $course]);
+ Log::info('course pay:', ['count' => $course]);
 
         if ($course->type === 'online') {
             //  Log::error("Paystack yes " );
             return redirect(config('frontend.base_url') . "/course/{$course->slug}/watch?success={$successMessage}");
         } else {
             // Log::error("Paystack vooedj " );
-           return redirect(config('frontend.base_url') . "/course/{$course->slug}?" . http_build_query([
+        //    return redirect(config('frontend.base_url') . "/course/{$course->slug}?" . http_build_query([
+        //             'success' => 'Payment successful and enrollment complete! Check your panel.'
+        //         ]));
+           return redirect(config('frontend.base_url') . "/profile2?" . http_build_query([
                     'success' => 'Payment successful and enrollment complete! Check your panel.'
                 ]));
         }

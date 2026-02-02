@@ -24,6 +24,7 @@ class Course extends Model
     'assigned_tutor_id',
     'title',
     'publish',
+    'is_active',
     'slug',
     'description',
     'image_thumbnail_url',
@@ -37,11 +38,23 @@ protected static function boot()
             if ($c->isDirty('title')) $c->slug = Str::slug($c->title);
         });
     }
+    protected static function booted()
+{
+    static::addGlobalScope('active', function ($builder) {
+        // Automatically hide any course where is_active is false
+        $builder->where('is_active', true);
+    });
+}
     public function category(): BelongsTo
     {
         return $this->belongsTo(Category::class);
     }
-
+    public function students()
+                {
+                    return $this->belongsToMany(User::class, 'course_user')
+                        ->withPivot(['payment_reference', 'paid_amount', 'paid_at'])
+                        ->withTimestamps();
+                }
 public function getRouteKeyName()
 {
     return 'slug'; // ← THIS IS THE MAGIC LINE
@@ -133,6 +146,15 @@ public function uploader(): BelongsTo
     {
         return $this->likes()->where('type', 'up')->count();
     }
+    public function uploadedCourses()
+        {
+            return $this->hasMany(Course::class, 'uploader_user_id');
+        }
+
+        public function ratings()
+{
+    return $this->morphMany(Rating::class, 'rateable');
+}
 
     // total downvotes
     public function getDownvotesAttribute()
@@ -140,5 +162,8 @@ public function uploader(): BelongsTo
         return $this->likes()->where('type', 'down')->count();
     }
 
-    
+            public function getSharesCountAttribute()
+        {
+            return $this->shares()->count();
+        }
 }

@@ -21,44 +21,40 @@ class VideoController extends Controller
     }
 
 
-public function index(Request $request)
-{
-    $user = $request->user();
-    $userId = $user->id;
-    $tutorId = $user->tutor?->id ?? $user->tutor_id ?? $userId;
+    public function index(Request $request)
+    {
+        $user = $request->user();
+        $userId = $user->id;
+        $tutorId = $user->tutor?->id ?? $user->tutor_id ?? $userId;
 
-    $query = Video::where('uploader_user_id', $userId)
-                  ->orWhere('uploader_user_id', $tutorId);
+        $query = Video::where('uploader_user_id', $userId)
+                    ->orWhere('uploader_user_id', $tutorId);
 
-    if ($search = $request->query('search')) {
-        $query->where('title', 'like', "%$search%");
+        if ($search = $request->query('search')) {
+            $query->where('title', 'like', "%$search%");
+        }
+
+        $videos = $query->latest()->paginate(12);
+
+        return VideoResource::collection($videos);
     }
 
-    $videos = $query->latest()->paginate(12);
-
-    return VideoResource::collection($videos);
-}
-
-// public function show(Video $video)
-// {
-//     $this->authorizeVideo($video);
-//     return new VideoResource($video);
-// }
 
 
-public function show($id)
-{
-    // Load video or fail
-    $video = Video::findOrFail($id);
 
-    // Authorization check
-    // if ($video->uploader_user_id !== auth()->id()) {
-    //     return response()->json(['error' => 'Unauthorized'], 403);
-    // }
+    public function show($id)
+    {
+        // Load video or fail
+        $video = Video::findOrFail($id);
 
-    return new VideoResource($video);
-}
-    public function store(Request $request)
+        // Authorization check
+        // if ($video->uploader_user_id !== auth()->id()) {
+        //     return response()->json(['error' => 'Unauthorized'], 403);
+        // }
+
+        return new VideoResource($video);
+    }
+        public function store(Request $request)
     {
         $request->validate([
             'course_id'      => 'required|exists:courses,id',
@@ -100,129 +96,124 @@ public function show($id)
         return new VideoResource($video);
     }
 
-public function update(Request $request, Video $video)
-{
-    // 1. Log the raw incoming request
-    \Log::info('=== VIDEO UPDATE START ===', [
-        'video_id' => $video->id,
-        'method' => $request->method(),
-        'all_input' => $request->except(['video_file', 'thumbnail_file']), // log text only
-        'has_video' => $request->hasFile('video_file') ? 'YES' : 'NO',
-        'has_thumbnail' => $request->hasFile('thumbnail_file') ? 'YES' : 'NO',
-    ]);
-
-    try {
-        $validated = $request->validate([
-            'title'          => 'sometimes|required|string|max:255',
-            'duration'       => 'nullable|integer|min:1',
-            'publish'        => 'sometimes|boolean',
-            'video_file'     => 'nullable|file|mimes:mp4,mov,avi,wmv|max:102400',
-            'thumbnail_file' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048',
+    public function update(Request $request, Video $video)
+    {
+        // 1. Log the raw incoming request
+        \Log::info('=== VIDEO UPDATE START ===', [
+            'video_id' => $video->id,
+            'method' => $request->method(),
+            'all_input' => $request->except(['video_file', 'thumbnail_file']), // log text only
+            'has_video' => $request->hasFile('video_file') ? 'YES' : 'NO',
+            'has_thumbnail' => $request->hasFile('thumbnail_file') ? 'YES' : 'NO',
         ]);
-        \Log::info('Validation passed');
-    } catch (\Illuminate\Validation\ValidationException $e) {
-        \Log::error('Validation FAILED', ['errors' => $e->errors()]);
-        return response()->json(['errors' => $e->errors()], 422);
+
+        try {
+            $validated = $request->validate([
+                'title'          => 'sometimes|required|string|max:255',
+                'duration'       => 'nullable|integer|min:1',
+                'publish'        => 'sometimes|boolean',
+                'video_file'     => 'nullable|file|mimes:mp4,mov,avi,wmv|max:102400',
+                'thumbnail_file' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048',
+            ]);
+            \Log::info('Validation passed');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            \Log::error('Validation FAILED', ['errors' => $e->errors()]);
+            return response()->json(['errors' => $e->errors()], 422);
+        }
+
+        $updateData = $validated;
+        unset($updateData['video_file'], $updateData['thumbnail_file']);
+
+        // 2. Handle Video File
+        if ($request->hasFile('video_file')) {
+            \Log::info('Processing Video File...');
+            if ($video->video_url) {
+                $this->cloudinaryService->deleteFile($video->video_url, 'video');
+                \Log::info('Old video deleted from Cloudinary');
+            }
+
+            $videoUrl = $this->cloudinaryService->uploadFile(
+                $request->file('video_file'), 
+                'course_videos', 
+                'video'
+            );
+
+            if ($videoUrl) {
+                $updateData['video_url'] = $videoUrl;
+                \Log::info('New Video Uploaded Successfully', ['url' => $videoUrl]);
+            } else {
+                \Log::error('Video upload to Cloudinary returned NULL');
+            }
+        }
+
+        // 3. Handle Thumbnail File
+        if ($request->hasFile('thumbnail_file')) {
+            \Log::info('Processing Thumbnail File...');
+            if ($video->thumbnail_url) {
+                $this->cloudinaryService->deleteFile($video->thumbnail_url);
+                \Log::info('Old thumbnail deleted from Cloudinary');
+            }
+
+            $thumbUrl = $this->cloudinaryService->uploadFile(
+                $request->file('thumbnail_file'), 
+                'video_thumbnails'
+            );
+
+            if ($thumbUrl) {
+                $updateData['thumbnail_url'] = $thumbUrl;
+                \Log::info('New Thumbnail Uploaded Successfully', ['url' => $thumbUrl]);
+            } else {
+                \Log::error('Thumbnail upload to Cloudinary returned NULL');
+            }
+        }
+
+        // 4. Log final data before DB update
+        \Log::info('Final Database Update Data:', $updateData);
+
+        $status = $video->update($updateData);
+
+        \Log::info('Database update status: ' . ($status ? 'SUCCESS' : 'FAILED'));
+
+        return new VideoResource($video->fresh());
     }
+    public function destroy(Video $video)
+    {
+        // Ensure the logged-in user is the owner/uploader
+        // if ($video->uploader_user_id !== auth()->id()) {
+        //     return response()->json(['error' => 'Unauthorized'], 403);
+        // }
 
-    $updateData = $validated;
-    unset($updateData['video_file'], $updateData['thumbnail_file']);
-
-    // 2. Handle Video File
-    if ($request->hasFile('video_file')) {
-        \Log::info('Processing Video File...');
+        // Delete video file if exists
         if ($video->video_url) {
             $this->cloudinaryService->deleteFile($video->video_url, 'video');
-            \Log::info('Old video deleted from Cloudinary');
         }
 
-        $videoUrl = $this->cloudinaryService->uploadFile(
-            $request->file('video_file'), 
-            'course_videos', 
-            'video'
-        );
-
-        if ($videoUrl) {
-            $updateData['video_url'] = $videoUrl;
-            \Log::info('New Video Uploaded Successfully', ['url' => $videoUrl]);
-        } else {
-            \Log::error('Video upload to Cloudinary returned NULL');
-        }
-    }
-
-    // 3. Handle Thumbnail File
-    if ($request->hasFile('thumbnail_file')) {
-        \Log::info('Processing Thumbnail File...');
+        // Delete thumbnail file if exists
         if ($video->thumbnail_url) {
             $this->cloudinaryService->deleteFile($video->thumbnail_url);
-            \Log::info('Old thumbnail deleted from Cloudinary');
         }
 
-        $thumbUrl = $this->cloudinaryService->uploadFile(
-            $request->file('thumbnail_file'), 
-            'video_thumbnails'
-        );
+        // Delete the database record
+        $video->delete();
 
-        if ($thumbUrl) {
-            $updateData['thumbnail_url'] = $thumbUrl;
-            \Log::info('New Thumbnail Uploaded Successfully', ['url' => $thumbUrl]);
-        } else {
-            \Log::error('Thumbnail upload to Cloudinary returned NULL');
-        }
+        return response()->json(['message' => 'Video and cloud files deleted successfully']);
     }
 
-    // 4. Log final data before DB update
-    \Log::info('Final Database Update Data:', $updateData);
 
-    $status = $video->update($updateData);
 
-    \Log::info('Database update status: ' . ($status ? 'SUCCESS' : 'FAILED'));
+    public function togglePublish(Video $video)
+    {
+        // Ensure the logged-in user is the owner/uploader
+        // if ($video->uploader_user_id !== auth()->id()) {
+        //     return response()->json(['error' => 'Unauthorized'], 403);
+        // }
 
-    return new VideoResource($video->fresh());
-}
-public function destroy(Video $video)
-{
-    // Ensure the logged-in user is the owner/uploader
-    // if ($video->uploader_user_id !== auth()->id()) {
-    //     return response()->json(['error' => 'Unauthorized'], 403);
-    // }
+        // Toggle the publish status
+        $video->publish = !$video->publish;
+        $video->save();
 
-    // Delete video file if exists
-    if ($video->video_url) {
-        $this->cloudinaryService->deleteFile($video->video_url, 'video');
+        return new VideoResource($video);
     }
-
-    // Delete thumbnail file if exists
-    if ($video->thumbnail_url) {
-        $this->cloudinaryService->deleteFile($video->thumbnail_url);
-    }
-
-    // Delete the database record
-    $video->delete();
-
-    return response()->json(['message' => 'Video and cloud files deleted successfully']);
-}
-
-
-// public function togglePublish(Video $video)
-// {
-//     $this->authorizeVideo($video);
-//     $video->update(['publish' => !$video->publish]);
-//     return new VideoResource($video);
-// }
-public function togglePublish(Video $video)
-{
-    // Ensure the logged-in user is the owner/uploader
-    // if ($video->uploader_user_id !== auth()->id()) {
-    //     return response()->json(['error' => 'Unauthorized'], 403);
-    // }
-
-    // Toggle the publish status
-    $video->publish = !$video->publish;
-    $video->save();
-
-    return new VideoResource($video);
-}
 
 private function authorizeVideo(Video $video)
 {

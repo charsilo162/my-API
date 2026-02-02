@@ -10,6 +10,9 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Password;
+use Illuminate\Support\Str;
+
 class AuthController extends Controller
 {
      protected $cloudinaryService;
@@ -98,58 +101,150 @@ class AuthController extends Controller
             'user' => $user,
         ], 200);
     }
-public function login(Request $request)
-{
-    $credentials = $request->validate([
-        'email' => 'required|email',
-        'password' => 'required|string',
-    ]);
+ public function login(Request $request)
+            {
+                $credentials = $request->validate([
+                    'email' => 'required|email',
+                    'password' => 'required|string',
+                ]);
 
-    if (!Auth::attempt($credentials)) {
-        return response()->json(['message' => 'Invalid credentials'], 401);
-    }
+                // 1. Check if the credentials are correct
+                if (!Auth::attempt($credentials)) {
+                    return response()->json(['message' => 'Invalid credentials'], 401);
+                }
 
-    $user = Auth::user();
-    $token = $user->createToken('spa')->plainTextToken;
-    Log::info('User logged in', [
-    'user_id' => $user->id,
-    'email' => $user->email,
-    'token' => $token,
-]);
-    return response()->json([
-        'message' => 'Logged in successfully',
-        'token' => $token,
-        'user' => $user
-    ]);
+                $user = Auth::user();
 
-    
-}
- public function logout()
-{
-    // \Log::alert('API LOGOUT HIT — USER ID: ' . auth()->id());
-    // \Log::info('Tokens before delete:', ['count' => auth()->user()->tokens()->count()]);
+                // 2. CHECK STATUS: Prevent login if is_active is false
+                if (!$user->is_active) {
+                    // Log out immediately to clear the session
+                    Auth::logout(); 
+                    
+                    return response()->json([
+                        'message' => 'Your account has been deactivated. Please contact support.'
+                    ], 403); // 403 Forbidden is the standard for blocked access
+                }
 
-    auth()->user()->tokens()->delete();
+                // 3. Issue Token only if user is active
+                $token = $user->createToken('spa')->plainTextToken;
 
-    //\Log::alert('ALL TOKENS DELETED — LOGOUT SUCCESSFUL');
+                return response()->json([
+                    'message' => 'Logged in successfully',
+                    'token' => $token,
+                    'user' => $user
+                ]);
+            }
+        public function logout()
+        {
+            // \Log::alert('API LOGOUT HIT — USER ID: ' . auth()->id());
+            // \Log::info('Tokens before delete:', ['count' => auth()->user()->tokens()->count()]);
 
-    return response()->json(['message' => 'Logged out successfully']);
-}
+            auth()->user()->tokens()->delete();
+
+            //\Log::alert('ALL TOKENS DELETED — LOGOUT SUCCESSFUL');
+
+            return response()->json(['message' => 'Logged out successfully']);
+        }
+
+        //     public function enrolledCourses(Request $request)
+        // {
+        //     $user = $request->user();
+        //     $query = $user->enrolledCourses();
+
+        //     if ($search = $request->query('search')) {
+        //         $query->where(function ($q) use ($search) { 
+        //             $q->where('title', 'like', "%$search%")
+        //               ->orWhere('description', 'like', "%$search%");
+        //         });
+        //     }
+
+        //     $courses = $query->with('videos')->paginate(9);
+
+        //     return CourseResource::collection($courses);
+        // }
+
 
     public function enrolledCourses(Request $request)
-{
-    $user = $request->user();
-    $query = $user->enrolledCourses();
+    {
+        $request->validate([
+            'type' => 'required|in:online,physical,hybrid',
+        ]);
+        // log::info('Enrolled courses request type: ' . $request->type);
+        $user = $request->user();
 
-    if ($search = $request->query('search')) {
-        $query->where(function ($q) use ($search) {
-            $q->where('title', 'like', "%$search%")
-              ->orWhere('description', 'like', "%$search%");
-        });
+        $query = $user->enrolledCourses()
+            ->where('type', $request->type);
+
+        if ($search = $request->query('search')) {
+            $query->where(function ($q) use ($search) {
+                $q->where('title', 'like', "%{$search}%")
+                ->orWhere('description', 'like', "%{$search}%");
+            });
+        }
+
+        // ✅ Conditional eager loading
+        $query->with([
+            'videos',
+            'centers' => function ($q) use ($request) {
+                if (in_array($request->type, ['physical', 'hybrid'])) {
+                    $q->select('centers.id', 'centers.name'); // keep it light
+                }
+            }
+        ]);
+
+        return CourseResource::collection(
+            $query->paginate(9)
+        );
     }
 
-    $courses = $query->with('videos')->paginate(9);
+    public function forgotPassword(Request $request)
+        {
+            $request->validate([
+                'email' => 'required|email|exists:users,email',
+            ]);
 
-    return CourseResource::collection($courses);
-}
+            $status = Password::sendResetLink(
+                $request->only('email')
+            );
+
+            if ($status === Password::RESET_LINK_SENT) {
+                return response()->json([
+                    'message' => 'Password reset link sent to your email'
+                ]);
+            }
+
+            return response()->json([
+                'message' => 'Unable to send reset link'
+            ], 500);
+        }
+
+
+
+    public function resetPassword(Request $request)
+            
+            {
+                $request->validate([
+                    'token' => 'required',
+                    'email' => 'required|email',
+                    'password' => 'required|min:6|confirmed',
+                ]);
+
+                $status = Password::reset(
+                    $request->only('email', 'password', 'password_confirmation', 'token'),
+                    function ($user, $password) {
+                        $user->forceFill([
+                            'password' => Hash::make($password),
+                            'remember_token' => Str::random(60),
+                        ])->save();
+                    }
+                );
+
+                if ($status === Password::PASSWORD_RESET) {
+                    return response()->json(['message' => 'Password reset successful']);
+                }
+
+                return response()->json(['message' => 'Invalid token or email'], 400);
+            }
+
+
 }

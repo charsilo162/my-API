@@ -21,31 +21,31 @@ class CategoryController extends Controller
         $this->cloudinaryService = $cloudinaryService;
     }
 
-public function index(Request $request)
-    {
-        $query = Category::query();
-        // Log::info('AUTH DEBUG', [
-        //     'authenticated' => Auth::check(),
-        //     'user_id'       => Auth::id(),
-        //     'guard'         => config('auth.defaults.guard'),
-        // ]);
-       // Search
-        if ($search = $request->query('search')) {
-            $query->where('name', 'like', "%{$search}%")
-                ->orWhere('slug', 'like', "%{$search}%");
+    public function index(Request $request)
+        {
+            $query = Category::query();
+            // Log::info('AUTH DEBUG', [
+            //     'authenticated' => Auth::check(),
+            //     'user_id'       => Auth::id(),
+            //     'guard'         => config('auth.defaults.guard'),
+            // ]);
+        // Search
+            if ($search = $request->query('search')) {
+                $query->where('name', 'like', "%{$search}%")
+                    ->orWhere('slug', 'like', "%{$search}%");
+            }
+
+            // Add course count
+            $query->withCount('courses');
+
+            // Pagination
+            $perPage = $request->query('per_page', 10);
+            $page = $request->query('page', 1);
+
+            $categories = $query->paginate($perPage);
+
+            return CategoryResource::collection($categories);
         }
-
-        // Add course count
-        $query->withCount('courses');
-
-        // Pagination
-        $perPage = $request->query('per_page', 10);
-        $page = $request->query('page', 1);
-
-        $categories = $query->paginate($perPage);
-
-        return CategoryResource::collection($categories);
-    }
       public function show(Category $category)
     {
         return new CategoryResource($category);
@@ -105,32 +105,32 @@ public function index(Request $request)
         return new CategoryResource($category);
     }
 
-public function destroy(Category $category)
-{
-    // 1. Check for associated courses
-    if ($category->courses()->exists()) {
-        // Option A: Reassign or Error (Safest)
-        return response()->json([
-            'message' => 'Cannot delete category. It has ' . $category->courses()->count() . ' courses still linked.',
-            'action_required' => 'Reassign or delete the courses first.',
-        ], 409); // Use 409 Conflict
+    public function destroy(Category $category)
+    {
+        // 1. Check for associated courses
+        if ($category->courses()->exists()) {
+            // Option A: Reassign or Error (Safest)
+            return response()->json([
+                'message' => 'Cannot delete category. It has ' . $category->courses()->count() . ' courses still linked.',
+                'action_required' => 'Reassign or delete the courses first.',
+            ], 409); // Use 409 Conflict
 
-        /*
-        // OPTION B: Mass Delete Related Courses (Use with caution!)
-        // $category->courses()->delete(); 
-        */
-    }
-    
-    // 2. Delete the thumbnail (as you already do)
-    if ($category->thumbnail_url) {
-        $this->cloudinaryService->deleteFile($category->thumbnail_url);
-    }
-    
-    // 3. Delete the category itself
-    $category->delete();
+            /*
+            // OPTION B: Mass Delete Related Courses (Use with caution!)
+            // $category->courses()->delete(); 
+            */
+        }
+        
+        // 2. Delete the thumbnail (as you already do)
+        if ($category->thumbnail_url) {
+            $this->cloudinaryService->deleteFile($category->thumbnail_url);
+        }
+        
+        // 3. Delete the category itself
+        $category->delete();
 
-    return response()->json(['message' => 'Category and its files successfully deleted.'], 200);
-}
+        return response()->json(['message' => 'Category and its files successfully deleted.'], 200);
+    }
 
     public function count(Request $request)
 {

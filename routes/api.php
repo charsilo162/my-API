@@ -1,5 +1,10 @@
 <?php
 
+use App\Http\Controllers\Api\Admin\AdminCenterController;
+use App\Http\Controllers\Api\Admin\AdminCourseController;
+use App\Http\Controllers\Api\Admin\AdminStatsController;
+use App\Http\Controllers\Api\Admin\AdminUserController;
+use App\Http\Controllers\Api\Admin\AdminVideoController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CourseController;
@@ -9,19 +14,22 @@ use App\Http\Controllers\Api\CenterController;
 use App\Http\Controllers\Api\CommentController;
 use App\Http\Controllers\Api\LikeController;
 use App\Http\Controllers\Api\PaymentApiController;
+use App\Http\Controllers\Api\RatingController;
 use App\Http\Controllers\Api\ShareController;
 use App\Http\Controllers\Api\StatsController;
 
 // ====================================
 // PUBLIC ROUTES (NO LOGIN REQUIRED)
 // ====================================
-
+Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
+Route::post('/reset-password', [AuthController::class, 'resetPassword']);
 Route::get('/test', fn() => response()->json(['message' => 'API IS WORKING!']));
 
 // Categories & Centers (public)
 Route::get('/categories', [CategoryController::class, 'index']);
 Route::get('/categories/count', [CategoryController::class, 'count']);
 Route::get('/categories/{category}', [CategoryController::class, 'show']); // GET /api/categories/{id} (single)
+
 
 
 Route::middleware('auth:sanctum')->get('centers/my', [CenterController::class, 'myCenters']);
@@ -37,6 +45,7 @@ Route::apiResource('courses', CourseController::class)->only(['index', 'show']);
 Route::get('comments', [CommentController::class, 'index']);        // ← Public: everyone sees
 Route::get('likes', [LikeController::class, 'show']);               // ← Public
 Route::get('shares/count', [ShareController::class, 'count']);      // ← Public
+Route::get('ratings', [RatingController::class, 'show']);
 
 // Auth (public)
 Route::post('/login', [AuthController::class, 'login']);
@@ -55,7 +64,9 @@ Route::apiResource('categories', CategoryController::class)->except(['index', 's
  Route::get('stats', [StatsController::class, 'index']);  
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me/enrolled-courses', [AuthController::class, 'enrolledCourses']);
+    Route::get('/my-courses', [CourseController::class, 'enrolledCoursesByType']);
 
+Route::get('/instructor/enrollments', [CourseController::class, 'myCourseEnrollments']);
 
 
     Route::middleware('auth:sanctum')->post('/payment/initialize', [PaymentApiController::class, 'initialize']);
@@ -69,6 +80,7 @@ Route::apiResource('categories', CategoryController::class)->except(['index', 's
     // Likes & Shares (require login)
     Route::post('likes/toggle', [LikeController::class, 'toggle']);
     Route::post('shares', [ShareController::class, 'store']);
+    Route::post('ratings/rate', [RatingController::class, 'rate']);
 
     // Admin routes...
     // Route::get('/courses/{course}/edit', [CourseController::class, 'edit'])
@@ -89,5 +101,34 @@ Route::apiResource('categories', CategoryController::class)->except(['index', 's
     Route::put('videos/{video}/toggle-publish', [VideoController::class, 'togglePublish']);
 
 
+});
+
+
+
+// routes/api.php
+
+Route::middleware(['auth:sanctum'])->prefix('admin')->group(function () {
+    // Users
+    Route::get('/users', [AdminUserController::class, 'index']);
+    Route::put('/users/{user}/toggle', [AdminUserController::class, 'toggleStatus']);
+     Route::delete('/users/{user}', [AdminUserController::class, 'destroy']);
+    
+    // Centers
+    Route::get('/centers', [AdminCenterController::class, 'index']);
+    Route::delete('/centers/{center}', [AdminCenterController::class, 'destroy']);
+    Route::put('/centers/{center}/toggle', [AdminCenterController::class, 'toggleStatus']);
+    
+    // Courses
+    Route::get('/courses', [AdminCourseController::class, 'index']);
+    Route::delete('/courses/{course}', [AdminCourseController::class, 'destroy']);
+    Route::put('courses/{course}/toggle-active', [AdminCourseController::class, 'toggleActive']);
+
+    // Videos
+    Route::get('/videos', [AdminVideoController::class, 'index']);
+    Route::delete('/videos/{video}', [AdminVideoController::class, 'destroy']);
+
+    Route::put('videos/{video}/toggle-active', [AdminVideoController::class, 'toggleActive']);
+   
+    Route::get('/stats', [AdminStatsController::class, 'index']);
 });
 

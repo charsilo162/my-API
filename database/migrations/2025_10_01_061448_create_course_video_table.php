@@ -15,7 +15,7 @@ Schema::create('course_video', function (Blueprint $table) {
     $table->foreignId('course_id')->constrained()->onDelete('cascade');
     $table->foreignId('video_id')->constrained()->onDelete('cascade');
     
-    $table->unsignedSmallInteger('order_index')->default(0); 
+    $table->unsignedSmallInteger('order_index')->default(1); 
 
     $table->primary(['course_id', 'video_id']); 
     

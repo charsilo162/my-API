@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\CourseEnrollmentResource;
 use App\Http\Resources\CourseResource;
 use App\Models\Course;
 use App\Services\CloudinaryService;
@@ -93,15 +94,18 @@ public function index(Request $request)
     }
 
     // Eager loads
-    $query->with([
-        'currentPrice', 'centers', 'category',
-        'videos' => fn($q) => $q->orderByPivot('order_index')->withPivot('order_index')->limit(1)
-    ])->withCount([
-        'users as registered_count',
-        'comments as comments_count',
-        'likes as likes_count' => fn($q) => $q->where('type', 'up'),
-        'likes as dislikes_count' => fn($q) => $q->where('type', 'down'),
-    ]);
+         $query->with([
+                    'currentPrice', 'centers', 'category',
+                    'videos' => fn($q) => $q->orderByPivot('order_index')->withPivot('order_index')->limit(1)
+                ])->withCount([
+                    'users as registered_count',
+                    'comments as comments_count',
+                    'shares as shares_count', // <--- ADD THIS LINE
+                    'likes as likes_count' => fn($q) => $q->where('type', 'up'),
+                    'likes as dislikes_count' => fn($q) => $q->where('type', 'down'),
+                     'ratings as ratings_count', // ✅ ADD THIS
+                ])->withAvg('ratings as average_rating', 'rating');
+;
 
     // Pagination
     if ($request->boolean('paginate')) {
@@ -133,27 +137,25 @@ public function show(Course $course)
         abort(404);
     }
 
+    // 1. Load relationships
     $course->load([
         'centers',
         'category',
         'currentPrice',
         'videos' => fn($q) => $q->orderByPivot('order_index')
-                          ->withPivot('order_index'),
-    ])
+                             ->withPivot('order_index'),
+    ]);
 
-    ->loadCount([
+    // 2. Load Counts (Removed rating from here as well if it was present)
+    $course->loadCount([
         'users as registered_count',
         'comments as comments_count',
         'likes as likes_count' => fn($q) => $q->where('type', 'up'),
         'likes as dislikes_count' => fn($q) => $q->where('type', 'down'),
-        // 'views as views_count',
-    ])
-
-    ->addSelect([
-        'average_rating' => \App\Models\Comment::selectRaw('COALESCE(AVG(rating), 4.34)')
-            ->whereColumn('course_id', 'courses.id')
-            ->limit(1)
     ]);
+
+    // 3. Set a hardcoded average rating for now to prevent Resource errors
+    $course->average_rating = 4.34;
 
     return new CourseResource($course);
 } 
@@ -227,6 +229,7 @@ public function update(Request $request, $id)
     ]);
 
     $data = $validated;
+  
 
     // Auto-generate slug
     if (isset($data['title'])) {
@@ -244,8 +247,14 @@ public function update(Request $request, $id)
             'courses'
         );
     }
-
-    // Final data for update (exclude price_amount from course update)
+      Log::info('UPDATE COURSE REQUEST', [
+            'all'        => $request->all(),
+            'inputs'     => $request->input(),
+            'center_id'  => $request->input('center_id'),
+            'type'       => $request->input('type'),
+            'files'      => $request->allFiles(),
+        ]);
+            // Final data for update (exclude price_amount from course update)
     unset($data['price_amount']);
 
     // Update the course
@@ -372,7 +381,61 @@ public function noVideos(Request $request)
 //  return CourseResource::collection($courses);
 // }
 
+public function myCourseEnrollments(Request $request)
+{
+    $user = $request->user();
+// log::info('MY COURSE ENROLLMENTS REQUEST', [
+//     'user_id' => $user,
+//     'request' => $request->all(),
+// ]);
+    $courses = Course::query()
+        ->where('uploader_user_id', $user->id)
 
+        // Filter by course
+        ->when($request->filled('course_id'), function ($q) use ($request) {
+            $q->where('id', $request->course_id);
+        })
+
+        // Filter by category
+        ->when($request->filled('category_id'), function ($q) use ($request) {
+            $q->where('category_id', $request->category_id);
+        })
+
+        ->with([
+            'category',
+
+            'students' => function ($q) use ($request) {
+
+                // Search student
+                if ($request->filled('search')) {
+                    $q->where(function ($sub) use ($request) {
+                        $sub->where('users.name', 'like', "%{$request->search}%")
+                            ->orWhere('users.email', 'like', "%{$request->search}%");
+                    });
+                }
+
+                // Min amount
+                if ($request->filled('min_amount')) {
+                    $q->wherePivot('paid_amount', '>=', $request->min_amount);
+                }
+
+                // Date range
+                if ($request->filled('from_date')) {
+                    $q->wherePivot('paid_at', '>=', $request->from_date);
+                }
+
+                if ($request->filled('to_date')) {
+                    $q->wherePivot('paid_at', '<=', $request->to_date);
+                }
+
+                $q->select('users.id', 'users.name', 'users.email')
+                  ->withPivot(['payment_reference', 'paid_amount', 'paid_at']);
+            }
+        ])
+        ->paginate(10);
+
+    return CourseEnrollmentResource::collection($courses);
+}
 
 public function publish(Course $course)
 {

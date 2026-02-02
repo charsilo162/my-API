@@ -14,6 +14,7 @@ public function toArray($request)
         'id' => $this->id,
         'name' => $this->name,
         'slug' => $this->slug,
+        'is_active'   => (bool) $this->is_active,
         'address' => $this->address,
         'description' => $this->description,
         'city' => $this->city,

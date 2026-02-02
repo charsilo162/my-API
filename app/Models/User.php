@@ -8,15 +8,17 @@ use Illuminate\Notifications\Notifiable;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Laravel\Sanctum\HasApiTokens;
+use App\Notifications\CustomResetPassword;
 
 class User extends Authenticatable
 {
     use HasFactory,HasApiTokens, Notifiable;
-
+    
     protected $fillable = [
         'name',
         'email',
         'type',
+        'is_active',
         'photo_path',
         'password',
     ];
@@ -33,6 +35,18 @@ class User extends Authenticatable
             'password' => 'hashed',
         ];
     }
+        protected static function booted()
+            {
+                static::addGlobalScope('active', function ($builder) {
+                    // Automatically hide any course where is_active is false
+                    $builder->where('is_active', true);
+                });
+            }
+
+        public function sendPasswordResetNotification($token)
+        {
+            $this->notify(new CustomResetPassword($token));
+        }
 
     /**
      * A User can be a Tutor.
@@ -77,7 +91,6 @@ public function enrolledCourses()
         // Assumes a 'course_user' pivot table
         return $this->belongsToMany(Course::class, 'course_user', 'user_id', 'course_id')->withTimestamps();
     }
-
 
         public function centers()
         {

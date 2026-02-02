@@ -14,6 +14,8 @@ class CourseResource extends JsonResource
     return [
         'id'          => $this->id,
         'title'       => $this->title,
+        'created_at'  => $this->created_at,
+        'is_active'   => (bool) $this->is_active,
         'slug'        => $this->slug,
         'description' => $this->description ?? 'No description available.',
         'type'        => $this->type,
@@ -37,7 +39,10 @@ class CourseResource extends JsonResource
 
         'first_video' => $this->whenLoaded('videos', fn() => $this->videos->first() ? [
             'id'          => $this->videos->first()->id,
-            'order_index' => $this->videos->first()->pivot->order_index ?? 1,
+            // 'order_index' => $this->videos->first()->pivot->order_index ?? 1,
+         'order_index' => max(1, (int) $this->videos->first()->pivot->order_index),
+         
+
         ] : null),
 
         'current_price' => [
@@ -48,9 +53,14 @@ class CourseResource extends JsonResource
         'registered_count' => $this->registered_count ?? 0,
         'comments_count'   => $this->comments_count ?? 0,
         'likes_count'      => $this->likes_count ?? 0,
+        'shares_count'     => $this->shares_count ?? 0,
         'dislikes_count'   => $this->dislikes_count ?? 0,
         'views_count'      => $this->views_count ?? 0,
-        'rating'           => $this->average_rating ?? 4.34,
+        'rating' => [
+                'average' => round($this->average_rating ?? 0, 1),
+                'count'   => $this->ratings_count ?? 0,
+            ],
+
         'price_formatted'  => $priceFormatted,
         'badge'            => $this->whenLoaded('videos') && $this->videos->isNotEmpty()
             ? 'PART ' . ($this->videos->first()->pivot->order_index ?? 1)

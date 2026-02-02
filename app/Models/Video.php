@@ -11,15 +11,16 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
 class Video extends Model
 {
     use HasFactory;
-protected $fillable = [
-'tutor_id',
-'title',
-'publish',
-'thumbnail_url',
-'uploader_user_id',
-'video_url',
-'duration',
-];
+        protected $fillable = [
+        'tutor_id',
+        'title',
+        'publish',
+        'is_active',
+        'thumbnail_url',
+        'uploader_user_id',
+        'video_url',
+        'duration',
+        ];
     /**
      * Get the Tutor who uploaded the video.
      */
@@ -32,10 +33,10 @@ protected $fillable = [
      * Get the Courses this video is part of.
      */
   
-public function courses()
-{
-    return $this->belongsToMany(Course::class, 'course_video');
-}
+    public function courses()
+    {
+        return $this->belongsToMany(Course::class, 'course_video');
+    }
     /**
      * Get all likes for the video.
      */
@@ -51,6 +52,12 @@ public function courses()
     {
         return $this->morphMany(Comment::class, 'commentable');
     }
+
+    public function ratings()
+        {
+            return $this->morphMany(Rating::class, 'rateable');
+        }
+
     
     /**
      * Get all shares for the video.
