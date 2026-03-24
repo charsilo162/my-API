@@ -309,12 +309,35 @@ public function update(Request $request, $id)
 }
 
 // app/Http/Controllers/Api/CourseController.php
+// public function watch(Course $course)
+// {
+  
+
+//     $course->load([
+//         'videos' => fn($q) => $q->orderByPivot('order_index')->withPivot('order_index')
+//     ]);
+
+//     return new CourseResource($course);
+// }
+
 public function watch(Course $course)
 {
-    // Authorization: only enrolled users
-    // if (!auth()->check() || !$course->users()->where('user_id', auth()->id())->exists()) {
-    //     abort(403, 'You are not enrolled in this course.');
-    // }
+    $user = auth()->user();
+
+    // Access the amount property through the relationship
+    // We use optional() or ?? to prevent errors if currentPrice is missing
+    $priceAmount = $course->currentPrice->amount ?? 0;
+
+    if ($priceAmount <= 0) {
+        // Automatically enroll the user
+        $user->courses()->syncWithoutDetaching([
+            $course->id => [
+                'paid_amount' => 0,
+                'payment_reference' => 'FREE_COURSE_' . time(),
+                'paid_at' => now(),
+            ]
+        ]);
+    }
 
     $course->load([
         'videos' => fn($q) => $q->orderByPivot('order_index')->withPivot('order_index')

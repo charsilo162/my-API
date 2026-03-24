@@ -81,6 +81,7 @@ Route::get('/instructor/enrollments', [CourseController::class, 'myCourseEnrollm
     Route::post('likes/toggle', [LikeController::class, 'toggle']);
     Route::post('shares', [ShareController::class, 'store']);
     Route::post('ratings/rate', [RatingController::class, 'rate']);
+     Route::get('ratings/loginshow', [RatingController::class, 'loginshow']);
 
     // Admin routes...
     // Route::get('/courses/{course}/edit', [CourseController::class, 'edit'])
@@ -108,7 +109,8 @@ Route::get('/instructor/enrollments', [CourseController::class, 'myCourseEnrollm
 // routes/api.php
 
 Route::middleware(['auth:sanctum'])->prefix('admin')->group(function () {
-    // Users
+Route::get('/courses', [AdminCourseController::class, 'index']);    
+// Users
     Route::get('/users', [AdminUserController::class, 'index']);
     Route::put('/users/{user}/toggle', [AdminUserController::class, 'toggleStatus']);
      Route::delete('/users/{user}', [AdminUserController::class, 'destroy']);
@@ -119,7 +121,7 @@ Route::middleware(['auth:sanctum'])->prefix('admin')->group(function () {
     Route::put('/centers/{center}/toggle', [AdminCenterController::class, 'toggleStatus']);
     
     // Courses
-    Route::get('/courses', [AdminCourseController::class, 'index']);
+    
     Route::delete('/courses/{course}', [AdminCourseController::class, 'destroy']);
     Route::put('courses/{course}/toggle-active', [AdminCourseController::class, 'toggleActive']);
 

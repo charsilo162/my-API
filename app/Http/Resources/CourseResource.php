@@ -15,6 +15,7 @@ class CourseResource extends JsonResource
         'id'          => $this->id,
         'title'       => $this->title,
         'created_at'  => $this->created_at,
+        'videos_count'     => $this->videos_count ?? 0,
         'is_active'   => (bool) $this->is_active,
         'slug'        => $this->slug,
         'description' => $this->description ?? 'No description available.',

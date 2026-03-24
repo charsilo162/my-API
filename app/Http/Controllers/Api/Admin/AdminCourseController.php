@@ -7,6 +7,8 @@ use App\Models\Course;
 use App\Services\CloudinaryService;
 use Illuminate\Http\Request;
 
+use function Illuminate\Log\log;
+
 class AdminCourseController extends Controller
 {
     protected $cloudinaryService;
@@ -16,17 +18,73 @@ class AdminCourseController extends Controller
         $this->cloudinaryService = $cloudinaryService;
     }
 
-    public function index(Request $request)
-        {
+    // public function index(Request $request)
+    //     {
             
-                    $query = Course::withoutGlobalScope('active'); 
+    //                 $query = Course::withoutGlobalScope('active'); 
 
-                        // 1. Admin Filters (Now you can filter specifically for blocked ones if you want)
-                        if ($request->has('is_active')) {
-                            $query->where('is_active', $request->boolean('is_active'));
-                        }
+    //                     // 1. Admin Filters (Now you can filter specifically for blocked ones if you want)
+    //                     if ($request->has('is_active')) {
+    //                         $query->where('is_active', $request->boolean('is_active'));
+    //                     }
 
-            // 1. Admin Filters
+    //         // 1. Admin Filters
+    //         if ($request->has('published')) {
+    //             $query->where('publish', $request->boolean('published'));
+    //         }
+
+    //         if ($search = $request->query('search')) {
+    //             $query->where(function ($q) use ($search) {
+    //                 $q->where('title', 'like', "%$search%")
+    //                 ->orWhereHas('centers', fn($cq) => $cq->where('name', 'like', "%$search%"));
+    //             });
+    //         }
+
+    //         // 2. Load ALL the relationships you use in the frontend
+    //         $query->with([
+    //             'currentPrice', 
+    //             'centers', 
+    //             'category',
+    //             'videos' => fn($q) => $q->orderByPivot('order_index')->withPivot('order_index')
+    //         ])->withCount([
+    //             'users as registered_count',
+    //             'comments as comments_count',
+    //             'shares as shares_count',
+    //             'likes as likes_count' => fn($q) => $q->where('type', 'up'),
+    //             'likes as dislikes_count' => fn($q) => $q->where('type', 'down'),
+    //             'ratings as ratings_count',
+    //         ])->withAvg('ratings', 'rating');
+
+    //         // 3. Return latest first
+    //         return CourseResource::collection($query->latest()->paginate($request->query('per_page', 15)));
+    //     }
+
+ public function index(Request $request)
+        {
+            $user = $request->user();
+
+            $query = Course::withoutGlobalScope('active');
+
+            /*
+            |--------------------------------------
+            | Role Check
+            |--------------------------------------
+            */
+
+            if (!$user || $user->type !== 'admin') {
+                $query->where('uploader_user_id', $user->id);
+            }
+
+            /*
+            |--------------------------------------
+            | Filters
+            |--------------------------------------
+            */
+
+            if ($request->has('is_active')) {
+                $query->where('is_active', $request->boolean('is_active'));
+            }
+
             if ($request->has('published')) {
                 $query->where('publish', $request->boolean('published'));
             }
@@ -38,13 +96,19 @@ class AdminCourseController extends Controller
                 });
             }
 
-            // 2. Load ALL the relationships you use in the frontend
+            /*
+            |--------------------------------------
+            | Relationships
+            |--------------------------------------
+            */
+
             $query->with([
-                'currentPrice', 
-                'centers', 
+                'currentPrice',
+                'centers',
                 'category',
                 'videos' => fn($q) => $q->orderByPivot('order_index')->withPivot('order_index')
             ])->withCount([
+                'videos',
                 'users as registered_count',
                 'comments as comments_count',
                 'shares as shares_count',
@@ -53,8 +117,9 @@ class AdminCourseController extends Controller
                 'ratings as ratings_count',
             ])->withAvg('ratings', 'rating');
 
-            // 3. Return latest first
-            return CourseResource::collection($query->latest()->paginate($request->query('per_page', 15)));
+            return CourseResource::collection(
+                $query->latest()->paginate($request->query('per_page', 15))
+            );
         }
 
     // Force delete any course and its cloud assets

@@ -29,6 +29,24 @@ class RatingController extends Controller
                 : null,
         ]);
     }
+    public function loginshow(Request $request)
+    {
+        $request->validate([
+            'resource_type' => 'required|string',
+            'resource_id'   => 'required|integer',
+        ]);
+
+        $query = Rating::where('rateable_type', $request->resource_type)
+            ->where('rateable_id', $request->resource_id);
+
+        return response()->json([
+            'average' => round($query->avg('rating'), 1),
+            'count'   => $query->count(),
+            'user_rating' => auth()->check()
+                ? $query->where('user_id', auth()->id())->value('rating')
+                : null,
+        ]);
+    }
 
     public function rate(Request $request)
     {
